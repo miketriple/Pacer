@@ -32,75 +32,82 @@ const jog  = dur => ({ label: 'Jog',  duration: dur, phase: 'work' });
 const walk = dur => ({ label: 'Walk', duration: dur, phase: 'rest' });
 const run  = dur => ({ label: 'Run',  duration: dur, phase: 'work' });
 
+const C25K_CUES = {
+  warmup: 'Start your warm-up walk.', work: 'Begin jogging.', rest: 'Walk it out.', cooldown: 'Cool down. Great work.'
+};
+
 const C25K_PRESETS = [
   { id: 'c25k-w1', name: 'C25K – Week 1', description: 'Jog 60s / Walk 90s × 8',
-    type: 'sequence', isPreset: true, group: 'c25k',
+    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
     segments: makeSegments(repeat(8, jog(60), walk(90))) },
 
   { id: 'c25k-w2', name: 'C25K – Week 2', description: 'Jog 90s / Walk 2min × 6',
-    type: 'sequence', isPreset: true, group: 'c25k',
+    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
     segments: makeSegments(repeat(6, jog(90), walk(2 * M))) },
 
   { id: 'c25k-w3', name: 'C25K – Week 3', description: '90s / 90s / 3min / 3min × 2',
-    type: 'sequence', isPreset: true, group: 'c25k',
+    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
     segments: makeSegments(repeat(2, jog(90), walk(90), jog(3 * M), walk(3 * M))) },
 
   { id: 'c25k-w4', name: 'C25K – Week 4', description: '3min / 90s / 5min / 2.5min × 2',
-    type: 'sequence', isPreset: true, group: 'c25k',
+    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
     segments: makeSegments([
       jog(3 * M), walk(90), jog(5 * M), walk(150),
       jog(3 * M), walk(90), jog(5 * M),
     ]) },
 
   { id: 'c25k-w5r1', name: 'C25K – Week 5 · Run 1', description: '5min jog × 3 with 3min walks',
-    type: 'sequence', isPreset: true, group: 'c25k',
+    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
     segments: makeSegments([jog(5 * M), walk(3 * M), jog(5 * M), walk(3 * M), jog(5 * M)]) },
 
   { id: 'c25k-w5r2', name: 'C25K – Week 5 · Run 2', description: '8min jog / 5min walk / 8min jog',
-    type: 'sequence', isPreset: true, group: 'c25k',
+    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
     segments: makeSegments([jog(8 * M), walk(5 * M), jog(8 * M)]) },
 
   { id: 'c25k-w5r3', name: 'C25K – Week 5 · Run 3', description: '20 minutes continuous',
-    type: 'sequence', isPreset: true, group: 'c25k',
+    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
     segments: makeSegments([run(20 * M)]) },
 
   { id: 'c25k-w6r1', name: 'C25K – Week 6 · Run 1', description: '5min / 3min / 8min / 3min / 5min',
-    type: 'sequence', isPreset: true, group: 'c25k',
+    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
     segments: makeSegments([jog(5 * M), walk(3 * M), jog(8 * M), walk(3 * M), jog(5 * M)]) },
 
   { id: 'c25k-w6r2', name: 'C25K – Week 6 · Run 2', description: '10min jog / 3min walk / 10min jog',
-    type: 'sequence', isPreset: true, group: 'c25k',
+    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
     segments: makeSegments([jog(10 * M), walk(3 * M), jog(10 * M)]) },
 
   { id: 'c25k-w6r3', name: 'C25K – Week 6 · Run 3', description: '22 minutes continuous',
-    type: 'sequence', isPreset: true, group: 'c25k',
+    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
     segments: makeSegments([run(22 * M)]) },
 
   { id: 'c25k-w7', name: 'C25K – Week 7', description: '25 minutes continuous',
-    type: 'sequence', isPreset: true, group: 'c25k',
+    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
     segments: makeSegments([run(25 * M)]) },
 
   { id: 'c25k-w8', name: 'C25K – Week 8', description: '28 minutes continuous',
-    type: 'sequence', isPreset: true, group: 'c25k',
+    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
     segments: makeSegments([run(28 * M)]) },
 
   { id: 'c25k-w9', name: 'C25K – Week 9', description: '30 minutes — you made it!',
-    type: 'sequence', isPreset: true, group: 'c25k',
+    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
     segments: makeSegments([run(30 * M)]) },
 ];
 
 const BUILTIN_PRESETS = [
   { id: 'boxing',    name: 'Boxing',    description: '3 min rounds · 1 min rest · 12 rounds',
     type: 'interval', isPreset: true, group: 'preset',
-    warmupDuration: 5 * M, workDuration: 3 * M, restDuration: M, rounds: 12, cooldownDuration: M },
+    warmupDuration: 5 * M, workDuration: 3 * M, restDuration: M, rounds: 12, cooldownDuration: M,
+    phaseCues: { warmup: 'Shadow box to warm up.', work: 'Hands up. Begin!', rest: 'Rest.', cooldown: 'Cool down.' } },
 
   { id: 'jumprope',  name: 'Jump Rope', description: '2 min work · 30s rest · 10 rounds',
     type: 'interval', isPreset: true, group: 'preset',
-    warmupDuration: 3 * M, workDuration: 2 * M, restDuration: 30, rounds: 10, cooldownDuration: M },
+    warmupDuration: 3 * M, workDuration: 2 * M, restDuration: 30, rounds: 10, cooldownDuration: M,
+    phaseCues: { warmup: 'Get your rope ready.', work: 'Jump!', rest: 'Rest.', cooldown: 'Good work. Cool down.' } },
 
   { id: 'hiit',      name: 'HIIT',      description: '40s work · 20s rest · 8 rounds',
     type: 'interval', isPreset: true, group: 'preset',
-    warmupDuration: 3 * M, workDuration: 40, restDuration: 20, rounds: 8, cooldownDuration: M },
+    warmupDuration: 3 * M, workDuration: 40, restDuration: 20, rounds: 8, cooldownDuration: M,
+    phaseCues: { warmup: 'Get ready to work.', work: 'Go hard!', rest: 'Rest.', cooldown: 'Cool down.' } },
 ];
 
 const ALL_PRESETS = [...BUILTIN_PRESETS, ...C25K_PRESETS];
@@ -397,27 +404,29 @@ function speak(text) {
 }
 
 function announcePhaseStart(seg) {
+  const cues = (activeWorkout && activeWorkout.phaseCues) || {};
   let text = '';
   switch (seg.phase) {
     case 'warmup':
-      text = 'Warm up. Keep a brisk pace.';
+      text = cues.warmup || 'Warm up.';
       break;
     case 'cooldown':
-      text = 'Cool down. You crushed it.';
+      text = cues.cooldown || 'Cool down.';
       break;
     case 'rest':
-      text = 'Rest.';
+      text = cues.rest || 'Rest.';
       break;
     case 'work': {
+      const cueText = cues.work || 'Begin!';
       const isSequence = activeWorkout && activeWorkout.type === 'sequence';
       if (isSequence) {
         const num   = seg.roundIndex + 1;
         const total = seg.totalRounds;
         text = total > 1
-          ? `${seg.label} — ${num} of ${total}. Go!`
-          : `${seg.label}. Go!`;
+          ? `${seg.label} ${num} of ${total}. ${cueText}`
+          : `${seg.label}. ${cueText}`;
       } else {
-        text = `Round ${seg.roundIndex + 1}. Begin!`;
+        text = `Round ${seg.roundIndex + 1}. ${cueText}`;
       }
       break;
     }
@@ -622,9 +631,29 @@ function renderConfig() {
   const w = editingWorkout;
   const container = document.getElementById('config-content');
   container.innerHTML = '';
+  const pc = w.phaseCues || {};
+
+  // Shared phase cue fields HTML
+  const cueFields = `
+    <div class="form-section-title" style="margin-top:16px">Phase Announcements</div>
+    <div class="form-group">
+      <label class="form-label">Warm-up cue</label>
+      <input type="text" class="form-input" id="cfg-cue-warmup" value="${escHtml(pc.warmup || 'Warm up.')}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Work / jog cue</label>
+      <input type="text" class="form-input" id="cfg-cue-work" value="${escHtml(pc.work || 'Begin!')}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Rest / walk cue</label>
+      <input type="text" class="form-input" id="cfg-cue-rest" value="${escHtml(pc.rest || 'Rest.')}">
+    </div>
+    <div class="form-group">
+      <label class="form-label">Cool-down cue</label>
+      <input type="text" class="form-input" id="cfg-cue-cooldown" value="${escHtml(pc.cooldown || 'Cool down.')}">
+    </div>`;
 
   if (w.type === 'sequence') {
-    // Show read-only segment list for sequence workouts
     const card = document.createElement('div');
     card.className = 'card';
     card.innerHTML = `<div class="form-section-title">Session Plan</div>
@@ -635,11 +664,11 @@ function renderConfig() {
             <span class="segment-label">${escHtml(s.label)}</span>
             <span class="segment-duration">${formatTime(s.duration)}</span>
           </li>`).join('')}
-      </ul>`;
+      </ul>
+      ${cueFields}`;
     container.appendChild(card);
 
   } else {
-    // Editable interval workout fields
     const card = document.createElement('div');
     card.className = 'card';
 
@@ -675,7 +704,8 @@ function renderConfig() {
       <div class="form-group">
         <label class="form-label">Cool-down (sec)</label>
         <input type="number" class="form-input" id="cfg-cooldown" value="${w.cooldownDuration}" min="0">
-      </div>`;
+      </div>
+      ${cueFields}`;
     container.appendChild(card);
   }
 
@@ -702,6 +732,13 @@ function buildWorkoutFromConfig() {
     w.restDuration    = parseInt(document.getElementById('cfg-rest').value)      || 0;
     w.cooldownDuration= parseInt(document.getElementById('cfg-cooldown').value)  || 0;
   }
+  // Read phase cues for both interval and sequence workouts
+  w.phaseCues = {
+    warmup:   document.getElementById('cfg-cue-warmup').value.trim()   || 'Warm up.',
+    work:     document.getElementById('cfg-cue-work').value.trim()     || 'Begin!',
+    rest:     document.getElementById('cfg-cue-rest').value.trim()     || 'Rest.',
+    cooldown: document.getElementById('cfg-cue-cooldown').value.trim() || 'Cool down.',
+  };
   return w;
 }
 
@@ -834,6 +871,7 @@ function showNewWorkout() {
     restDuration:     20,
     rounds:           8,
     cooldownDuration: M,
+    phaseCues:        { warmup: 'Warm up.', work: 'Begin!', rest: 'Rest.', cooldown: 'Cool down.' },
     cues:             [],
   };
   document.getElementById('config-title').textContent = 'New Workout';
