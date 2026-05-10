@@ -1,222 +1,435 @@
 /* ============================================================
-   PACER — app.js
-   Interval timer with voice cues, themes, and API sync.
+   PACER — app.js  v2
+   Guided rhythm for any workflow.
    ============================================================ */
 
 'use strict';
 
 // ============================================================
-// 1. PRESET DATA
+// 1. CONSTANTS
 // ============================================================
 
-const M = 60; // seconds per minute — used for readability below
+const STEP_COLORS = {
+  red:    '#ff4444',
+  orange: '#ff8c00',
+  yellow: '#ffd700',
+  green:  '#39c759',
+  teal:   '#00c9a7',
+  blue:   '#4488ff',
+  purple: '#a044ff',
+  pink:   '#ff44aa',
+  white:  '#e8e8e8',
+  grey:   '#888888',
+};
 
-/** Build a segment array with warmup + intervals + cooldown */
-function makeSegments(intervals, warmup = 5 * M, cooldown = 5 * M) {
-  const segs = [];
-  if (warmup > 0) segs.push({ label: 'Warm-up Walk', duration: warmup, phase: 'warmup' });
-  segs.push(...intervals);
-  if (cooldown > 0) segs.push({ label: 'Cool-down Walk', duration: cooldown, phase: 'cooldown' });
-  return segs;
+const DEFAULT_COLOR = 'blue';
+const DEFAULT_STEP_DURATION = 60; // seconds
+
+// ============================================================
+// 2. TEMPLATE LIBRARY
+// ============================================================
+
+function makeStep(name, duration, color = DEFAULT_COLOR, cueOverride = null) {
+  return {
+    type: 'step',
+    id: genId(),
+    name,
+    duration,
+    color,
+    voiceCues: [{ id: genId(), offsetSeconds: 0, text: cueOverride ?? name }],
+  };
 }
 
-/** Repeat a set of intervals n times */
-function repeat(n, ...segs) {
+function makeGroup(name, repeats, steps) {
+  return { type: 'group', id: genId(), name, repeats, steps };
+}
+
+const M = 60;
+
+const TEMPLATES = [
+  {
+    category: 'Fitness',
+    items: [
+      {
+        id: 'tpl-boxing',
+        name: 'Boxing',
+        description: '3 min rounds · 1 min rest · 12 rounds',
+        items: [
+          makeStep('Warm Up', 5 * M, 'yellow'),
+          makeGroup('Round', 12, [
+            makeStep('Round', 3 * M, 'red', 'Begin!'),
+            makeStep('Rest', M, 'blue', 'Rest.'),
+          ]),
+          makeStep('Cool Down', M, 'teal'),
+        ],
+      },
+      {
+        id: 'tpl-jumprope',
+        name: 'Jump Rope',
+        description: '2 min work · 30s rest · 10 rounds',
+        items: [
+          makeStep('Warm Up', 3 * M, 'yellow'),
+          makeGroup('Round', 10, [
+            makeStep('Jump', 2 * M, 'red', 'Jump!'),
+            makeStep('Rest', 30, 'blue', 'Rest.'),
+          ]),
+          makeStep('Cool Down', M, 'teal'),
+        ],
+      },
+      {
+        id: 'tpl-hiit',
+        name: 'HIIT',
+        description: '40s work · 20s rest · 8 rounds',
+        items: [
+          makeStep('Warm Up', 3 * M, 'yellow'),
+          makeGroup('Round', 8, [
+            makeStep('Work', 40, 'red', 'Go!'),
+            makeStep('Rest', 20, 'blue', 'Rest.'),
+          ]),
+          makeStep('Cool Down', M, 'teal'),
+        ],
+      },
+      {
+        id: 'tpl-c25k-w1',
+        name: 'C25K — Week 1',
+        description: 'Jog 60s / Walk 90s × 8',
+        items: [
+          makeStep('Warm Up Walk', 5 * M, 'yellow', 'Start your warm up walk.'),
+          makeGroup('Interval', 8, [
+            makeStep('Jog', 60, 'red', 'Begin jogging.'),
+            makeStep('Walk', 90, 'blue', 'Walk it out.'),
+          ]),
+          makeStep('Cool Down Walk', 5 * M, 'teal', 'Cool down. Great work.'),
+        ],
+      },
+      {
+        id: 'tpl-c25k-w2',
+        name: 'C25K — Week 2',
+        description: 'Jog 90s / Walk 2min × 6',
+        items: [
+          makeStep('Warm Up Walk', 5 * M, 'yellow', 'Start your warm up walk.'),
+          makeGroup('Interval', 6, [
+            makeStep('Jog', 90, 'red', 'Begin jogging.'),
+            makeStep('Walk', 2 * M, 'blue', 'Walk it out.'),
+          ]),
+          makeStep('Cool Down Walk', 5 * M, 'teal', 'Cool down. Great work.'),
+        ],
+      },
+      {
+        id: 'tpl-c25k-w3',
+        name: 'C25K — Week 3',
+        description: '90s / 90s / 3min / 3min × 2',
+        items: [
+          makeStep('Warm Up Walk', 5 * M, 'yellow', 'Start your warm up walk.'),
+          makeGroup('Interval', 2, [
+            makeStep('Jog', 90, 'red', 'Begin jogging.'),
+            makeStep('Walk', 90, 'blue', 'Walk it out.'),
+            makeStep('Jog', 3 * M, 'red', 'Keep going.'),
+            makeStep('Walk', 3 * M, 'blue', 'Walk it out.'),
+          ]),
+          makeStep('Cool Down Walk', 5 * M, 'teal', 'Cool down. Great work.'),
+        ],
+      },
+      {
+        id: 'tpl-c25k-w4',
+        name: 'C25K — Week 4',
+        description: '3min / 90s / 5min / 2.5min × 2',
+        items: [
+          makeStep('Warm Up Walk', 5 * M, 'yellow', 'Start your warm up walk.'),
+          makeGroup('Interval', 2, [
+            makeStep('Jog', 3 * M, 'red', 'Begin jogging.'),
+            makeStep('Walk', 90, 'blue', 'Walk it out.'),
+            makeStep('Jog', 5 * M, 'red', 'Keep going.'),
+            makeStep('Walk', 150, 'blue', 'Walk it out.'),
+          ]),
+          makeStep('Cool Down Walk', 5 * M, 'teal', 'Cool down. Great work.'),
+        ],
+      },
+      {
+        id: 'tpl-c25k-w5r1',
+        name: 'C25K — Week 5, Run 1',
+        description: '5min jog × 3 with 3min walks',
+        items: [
+          makeStep('Warm Up Walk', 5 * M, 'yellow', 'Start your warm up walk.'),
+          makeGroup('Interval', 3, [
+            makeStep('Jog', 5 * M, 'red', 'Begin jogging.'),
+            makeStep('Walk', 3 * M, 'blue', 'Walk it out.'),
+          ]),
+          makeStep('Cool Down Walk', 5 * M, 'teal', 'Cool down. Great work.'),
+        ],
+      },
+      {
+        id: 'tpl-c25k-w5r2',
+        name: 'C25K — Week 5, Run 2',
+        description: '8min jog / 5min walk / 8min jog',
+        items: [
+          makeStep('Warm Up Walk', 5 * M, 'yellow', 'Start your warm up walk.'),
+          makeStep('Jog', 8 * M, 'red', 'Begin jogging.'),
+          makeStep('Walk', 5 * M, 'blue', 'Walk it out.'),
+          makeStep('Jog', 8 * M, 'red', 'Keep going. Final stretch.'),
+          makeStep('Cool Down Walk', 5 * M, 'teal', 'Cool down. Great work.'),
+        ],
+      },
+      {
+        id: 'tpl-c25k-w5r3',
+        name: 'C25K — Week 5, Run 3',
+        description: '20 minutes continuous',
+        items: [
+          makeStep('Warm Up Walk', 5 * M, 'yellow', 'Start your warm up walk.'),
+          makeStep('Run', 20 * M, 'red', 'Begin running. You have got this.'),
+          makeStep('Cool Down Walk', 5 * M, 'teal', 'Cool down. Excellent work.'),
+        ],
+      },
+      {
+        id: 'tpl-c25k-w6r1',
+        name: 'C25K — Week 6, Run 1',
+        description: '5min / 3min / 8min / 3min / 5min',
+        items: [
+          makeStep('Warm Up Walk', 5 * M, 'yellow', 'Start your warm up walk.'),
+          makeStep('Jog', 5 * M, 'red', 'Begin jogging.'),
+          makeStep('Walk', 3 * M, 'blue', 'Walk it out.'),
+          makeStep('Jog', 8 * M, 'red', 'Keep going.'),
+          makeStep('Walk', 3 * M, 'blue', 'Walk it out.'),
+          makeStep('Jog', 5 * M, 'red', 'Final stretch.'),
+          makeStep('Cool Down Walk', 5 * M, 'teal', 'Cool down. Great work.'),
+        ],
+      },
+      {
+        id: 'tpl-c25k-w6r2',
+        name: 'C25K — Week 6, Run 2',
+        description: '10min jog / 3min walk / 10min jog',
+        items: [
+          makeStep('Warm Up Walk', 5 * M, 'yellow', 'Start your warm up walk.'),
+          makeStep('Jog', 10 * M, 'red', 'Begin jogging.'),
+          makeStep('Walk', 3 * M, 'blue', 'Walk it out.'),
+          makeStep('Jog', 10 * M, 'red', 'Final stretch.'),
+          makeStep('Cool Down Walk', 5 * M, 'teal', 'Cool down. Great work.'),
+        ],
+      },
+      {
+        id: 'tpl-c25k-w6r3', name: 'C25K — Week 6, Run 3', description: '22 minutes continuous',
+        items: [makeStep('Warm Up Walk', 5*M,'yellow','Start your warm up walk.'), makeStep('Run',22*M,'red','Begin running.'), makeStep('Cool Down Walk',5*M,'teal','Cool down.')],
+      },
+      {
+        id: 'tpl-c25k-w7', name: 'C25K — Week 7', description: '25 minutes continuous',
+        items: [makeStep('Warm Up Walk',5*M,'yellow','Start your warm up walk.'), makeStep('Run',25*M,'red','Begin running.'), makeStep('Cool Down Walk',5*M,'teal','Cool down.')],
+      },
+      {
+        id: 'tpl-c25k-w8', name: 'C25K — Week 8', description: '28 minutes continuous',
+        items: [makeStep('Warm Up Walk',5*M,'yellow','Start your warm up walk.'), makeStep('Run',28*M,'red','Begin running.'), makeStep('Cool Down Walk',5*M,'teal','Cool down.')],
+      },
+      {
+        id: 'tpl-c25k-w9', name: 'C25K — Week 9', description: '30 minutes — you made it!',
+        items: [makeStep('Warm Up Walk',5*M,'yellow','Start your warm up walk.'), makeStep('Run',30*M,'red','Begin running. This is it.'), makeStep('Cool Down Walk',5*M,'teal','Cool down. You did it!')],
+      },
+    ],
+  },
+  {
+    category: 'Focus & Productivity',
+    items: [
+      {
+        id: 'tpl-pomodoro',
+        name: 'Pomodoro',
+        description: '25min focus / 5min break × 4',
+        items: [
+          makeGroup('Pomodoro', 4, [
+            makeStep('Focus', 25 * M, 'purple', 'Focus time. Begin.'),
+            makeStep('Break', 5 * M, 'green', 'Take a break.'),
+          ]),
+        ],
+      },
+      {
+        id: 'tpl-deepwork',
+        name: 'Deep Work Session',
+        description: '90min focus / 20min rest',
+        items: [
+          makeStep('Deep Work', 90 * M, 'purple', 'Deep work. Begin.'),
+          makeStep('Rest', 20 * M, 'green', 'Step away and rest.'),
+        ],
+      },
+    ],
+  },
+  {
+    category: 'Mindfulness',
+    items: [
+      {
+        id: 'tpl-boxbreathing',
+        name: 'Box Breathing',
+        description: 'Inhale / Hold / Exhale / Hold × 8',
+        items: [
+          makeGroup('Cycle', 8, [
+            makeStep('Inhale', 4, 'teal', 'Inhale slowly.'),
+            makeStep('Hold', 4, 'blue', 'Hold.'),
+            makeStep('Exhale', 4, 'teal', 'Exhale slowly.'),
+            makeStep('Hold', 4, 'blue', 'Hold.'),
+          ]),
+        ],
+      },
+      {
+        id: 'tpl-meditation',
+        name: 'Guided Meditation',
+        description: '5min settle / 20min sit / 5min ease out',
+        items: [
+          makeStep('Settle In', 5 * M, 'teal', 'Find your position and settle in.'),
+          makeStep('Sit', 20 * M, 'blue', 'Begin your meditation.'),
+          makeStep('Ease Out', 5 * M, 'teal', 'Gently begin to return.'),
+        ],
+      },
+    ],
+  },
+  {
+    category: 'Cooking',
+    items: [
+      {
+        id: 'tpl-softboiledegg',
+        name: 'Soft Boiled Egg',
+        description: 'Bring to boil, cook, ice bath',
+        items: [
+          makeStep('Bring to Boil', 8 * M, 'orange', 'Bring water to a rolling boil.'),
+          makeStep('Cook', 7 * M, 'red', 'Add eggs. Timer started.'),
+          makeStep('Ice Bath', 5 * M, 'blue', 'Transfer to ice bath.'),
+        ],
+      },
+      {
+        id: 'tpl-frenchpress',
+        name: 'French Press Coffee',
+        description: 'Bloom, brew, press',
+        items: [
+          makeStep('Bloom', 30, 'yellow', 'Add a little water. Let it bloom.'),
+          makeStep('Brew', 3 * M + 30, 'orange', 'Fill the press. Brewing now.'),
+          makeStep('Press & Pour', 30, 'red', 'Press slowly and pour.'),
+        ],
+      },
+    ],
+  },
+];
+
+// ============================================================
+// 3. STATE
+// ============================================================
+
+let paces         = [];
+let editingPace   = null;
+let activePace    = null;
+let flatSegments  = [];   // flattened steps for timer
+let segmentIndex  = 0;
+let secondsLeft   = 0;
+let segmentDuration = 0;
+let timerInterval = null;
+let isPaused      = false;
+let totalElapsedSeconds = 0;
+
+let settings = {
+  theme: 'venom', mode: 'system', apiUrl: '', apiKey: '', voiceName: '',
+};
+
+// ============================================================
+// 4. UTILITIES
+// ============================================================
+
+function genId() {
+  return '_' + Math.random().toString(36).slice(2, 9);
+}
+
+function formatTime(sec) {
+  const s = Math.abs(Math.round(sec));
+  return `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
+}
+
+function escHtml(str) {
+  return String(str ?? '').replace(/[&<>"']/g, c =>
+    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
+}
+
+function colorHex(colorKey) {
+  return STEP_COLORS[colorKey] || STEP_COLORS[DEFAULT_COLOR];
+}
+
+function makeBlankStep() {
+  return makeStep('Step', DEFAULT_STEP_DURATION, DEFAULT_COLOR);
+}
+
+function makeBlankGroup() {
+  return makeGroup('Group', 3, [makeBlankStep(), makeBlankStep()]);
+}
+
+function paceMeta(pace) {
+  const total = flattenItems(pace.items).reduce((a, s) => a + s.duration, 0);
+  const stepCount = flattenItems(pace.items).length;
+  return `${stepCount} step${stepCount !== 1 ? 's' : ''} · ${formatTime(total)}`;
+}
+
+function paceColorDots(pace) {
+  const steps = flattenItems(pace.items).slice(0, 5);
+  return steps.map(s => `<span class="pace-card-dot" style="background:${colorHex(s.color)}"></span>`).join('');
+}
+
+/** Flatten items (steps + groups) into a sequential list of steps for the timer */
+function flattenItems(items) {
   const result = [];
-  for (let i = 0; i < n; i++) result.push(...segs.map(s => ({ ...s })));
+  for (const item of items) {
+    if (item.type === 'step') {
+      result.push(item);
+    } else if (item.type === 'group') {
+      for (let r = 0; r < (item.repeats || 1); r++) {
+        for (const step of item.steps) {
+          result.push({ ...step, _groupName: item.name, _repeat: r + 1, _totalRepeats: item.repeats });
+        }
+      }
+    }
+  }
   return result;
 }
 
-/** Jog and walk segment shorthand */
-const jog  = dur => ({ label: 'Jog',  duration: dur, phase: 'work' });
-const walk = dur => ({ label: 'Walk', duration: dur, phase: 'rest' });
-const run  = dur => ({ label: 'Run',  duration: dur, phase: 'work' });
-
-const C25K_CUES = {
-  warmup: 'Start your warm-up walk.', work: 'Begin jogging.', rest: 'Walk it out.', cooldown: 'Cool down. Great work.'
-};
-
-const C25K_PRESETS = [
-  { id: 'c25k-w1', name: 'C25K – Week 1', description: 'Jog 60s / Walk 90s × 8',
-    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
-    segments: makeSegments(repeat(8, jog(60), walk(90))) },
-
-  { id: 'c25k-w2', name: 'C25K – Week 2', description: 'Jog 90s / Walk 2min × 6',
-    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
-    segments: makeSegments(repeat(6, jog(90), walk(2 * M))) },
-
-  { id: 'c25k-w3', name: 'C25K – Week 3', description: '90s / 90s / 3min / 3min × 2',
-    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
-    segments: makeSegments(repeat(2, jog(90), walk(90), jog(3 * M), walk(3 * M))) },
-
-  { id: 'c25k-w4', name: 'C25K – Week 4', description: '3min / 90s / 5min / 2.5min × 2',
-    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
-    segments: makeSegments([
-      jog(3 * M), walk(90), jog(5 * M), walk(150),
-      jog(3 * M), walk(90), jog(5 * M),
-    ]) },
-
-  { id: 'c25k-w5r1', name: 'C25K – Week 5 · Run 1', description: '5min jog × 3 with 3min walks',
-    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
-    segments: makeSegments([jog(5 * M), walk(3 * M), jog(5 * M), walk(3 * M), jog(5 * M)]) },
-
-  { id: 'c25k-w5r2', name: 'C25K – Week 5 · Run 2', description: '8min jog / 5min walk / 8min jog',
-    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
-    segments: makeSegments([jog(8 * M), walk(5 * M), jog(8 * M)]) },
-
-  { id: 'c25k-w5r3', name: 'C25K – Week 5 · Run 3', description: '20 minutes continuous',
-    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
-    segments: makeSegments([run(20 * M)]) },
-
-  { id: 'c25k-w6r1', name: 'C25K – Week 6 · Run 1', description: '5min / 3min / 8min / 3min / 5min',
-    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
-    segments: makeSegments([jog(5 * M), walk(3 * M), jog(8 * M), walk(3 * M), jog(5 * M)]) },
-
-  { id: 'c25k-w6r2', name: 'C25K – Week 6 · Run 2', description: '10min jog / 3min walk / 10min jog',
-    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
-    segments: makeSegments([jog(10 * M), walk(3 * M), jog(10 * M)]) },
-
-  { id: 'c25k-w6r3', name: 'C25K – Week 6 · Run 3', description: '22 minutes continuous',
-    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
-    segments: makeSegments([run(22 * M)]) },
-
-  { id: 'c25k-w7', name: 'C25K – Week 7', description: '25 minutes continuous',
-    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
-    segments: makeSegments([run(25 * M)]) },
-
-  { id: 'c25k-w8', name: 'C25K – Week 8', description: '28 minutes continuous',
-    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
-    segments: makeSegments([run(28 * M)]) },
-
-  { id: 'c25k-w9', name: 'C25K – Week 9', description: '30 minutes — you made it!',
-    type: 'sequence', isPreset: true, group: 'c25k', phaseCues: { ...C25K_CUES },
-    segments: makeSegments([run(30 * M)]) },
-];
-
-const BUILTIN_PRESETS = [
-  { id: 'boxing',    name: 'Boxing',    description: '3 min rounds · 1 min rest · 12 rounds',
-    type: 'interval', isPreset: true, group: 'preset',
-    warmupDuration: 5 * M, workDuration: 3 * M, restDuration: M, rounds: 12, cooldownDuration: M,
-    phaseCues: { warmup: 'Shadow box to warm up.', work: 'Hands up. Begin!', rest: 'Rest.', cooldown: 'Cool down.' } },
-
-  { id: 'jumprope',  name: 'Jump Rope', description: '2 min work · 30s rest · 10 rounds',
-    type: 'interval', isPreset: true, group: 'preset',
-    warmupDuration: 3 * M, workDuration: 2 * M, restDuration: 30, rounds: 10, cooldownDuration: M,
-    phaseCues: { warmup: 'Get your rope ready.', work: 'Jump!', rest: 'Rest.', cooldown: 'Good work. Cool down.' } },
-
-  { id: 'hiit',      name: 'HIIT',      description: '40s work · 20s rest · 8 rounds',
-    type: 'interval', isPreset: true, group: 'preset',
-    warmupDuration: 3 * M, workDuration: 40, restDuration: 20, rounds: 8, cooldownDuration: M,
-    phaseCues: { warmup: 'Get ready to work.', work: 'Go hard!', rest: 'Rest.', cooldown: 'Cool down.' } },
-];
-
-const ALL_PRESETS = [...BUILTIN_PRESETS, ...C25K_PRESETS];
-
 // ============================================================
-// 2. STATE
-// ============================================================
-
-let workouts       = [];          // custom workouts from storage/API
-let editingWorkout = null;        // workout being configured/edited
-let activeWorkout  = null;        // workout currently running
-let activeSegments = [];          // flat segment array built from activeWorkout
-let segmentIndex   = 0;           // which segment is current
-let segmentDuration = 0;          // total duration of current segment (for progress)
-let secondsLeft    = 0;           // countdown for current segment
-let timerInterval  = null;        // setInterval reference
-let isPaused       = false;
-let workoutStartTime = 0;         // Date.now() when workout started (for elapsed time)
-let totalElapsedSeconds = 0;      // accumulated across pauses
-
-let settings = {
-  theme:     'venom',
-  mode:      'system',
-  apiUrl:    '',
-  apiKey:    '',
-  voiceName: '',
-};
-
-// ============================================================
-// 3. STORAGE & API
+// 5. STORAGE & SYNC
 // ============================================================
 
 function loadSettings() {
-  try {
-    const saved = localStorage.getItem('pacer_settings');
-    if (saved) Object.assign(settings, JSON.parse(saved));
-  } catch (e) { /* ignore */ }
+  try { const s = localStorage.getItem('pacer_settings'); if (s) Object.assign(settings, JSON.parse(s)); } catch(e){}
 }
+function saveSettings() { localStorage.setItem('pacer_settings', JSON.stringify(settings)); }
 
-function saveSettings() {
-  localStorage.setItem('pacer_settings', JSON.stringify(settings));
+function loadLocalPaces() {
+  try { const s = localStorage.getItem('pacer_paces'); return s ? JSON.parse(s) : []; } catch(e){ return []; }
 }
+function saveLocalPaces() { localStorage.setItem('pacer_paces', JSON.stringify(paces)); }
 
-/** Load custom workouts from localStorage */
-function loadLocalWorkouts() {
-  try {
-    const saved = localStorage.getItem('pacer_workouts');
-    return saved ? JSON.parse(saved) : [];
-  } catch (e) { return []; }
-}
-
-/** Save custom workouts to localStorage */
-function saveLocalWorkouts() {
-  localStorage.setItem('pacer_workouts', JSON.stringify(workouts));
-}
-
-/** Make an authenticated API request */
 async function apiRequest(method, path, body = null) {
   if (!settings.apiUrl || !settings.apiKey) throw new Error('API not configured');
   const url = settings.apiUrl.replace(/\/$/, '') + path;
-  const opts = {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'X-API-Key': settings.apiKey,
-    },
-  };
+  const opts = { method, headers: { 'Content-Type': 'application/json', 'X-API-Key': settings.apiKey } };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(url, opts);
-  if (!res.ok) throw new Error(`API error: ${res.status}`);
+  if (!res.ok) throw new Error(`${res.status}`);
   return res.json();
 }
 
-/** Sync: fetch workouts from API, merge with any that aren't there yet */
-async function syncWorkouts() {
+async function syncPaces() {
   if (!settings.apiUrl || !settings.apiKey) return;
   setSyncStatus('Syncing…');
   try {
     const data = await apiRequest('GET', '/workouts');
-    workouts = data.workouts || data; // accept {workouts:[]} or []
-    saveLocalWorkouts();
+    paces = data.workouts || data;
+    saveLocalPaces();
     setSyncStatus('Synced', 'ok');
-    renderWorkoutList();
-  } catch (e) {
-    setSyncStatus('Offline — using local data', 'error');
-  }
+    renderPaceList();
+  } catch(e) { setSyncStatus('Offline — using local data', 'error'); }
 }
 
-async function persistWorkout(workout) {
-  // Always save locally first
-  const idx = workouts.findIndex(w => w.id === workout.id);
-  if (idx >= 0) workouts[idx] = workout;
-  else workouts.unshift(workout);
-  saveLocalWorkouts();
-  renderWorkoutList();
-
-  // Then try API
-  try {
-    await apiRequest('PUT', `/workouts/${workout.id}`, workout);
-  } catch (e) { /* offline — local save is enough */ }
+async function persistPace(pace) {
+  const idx = paces.findIndex(p => p.id === pace.id);
+  if (idx >= 0) paces[idx] = pace; else paces.unshift(pace);
+  saveLocalPaces();
+  renderPaceList();
+  try { await apiRequest('PUT', `/workouts/${pace.id}`, pace); } catch(e){}
 }
 
-async function deleteWorkout(id) {
-  workouts = workouts.filter(w => w.id !== id);
-  saveLocalWorkouts();
-  renderWorkoutList();
-  try {
-    await apiRequest('DELETE', `/workouts/${id}`);
-  } catch (e) { /* offline */ }
+async function deletePace(id) {
+  paces = paces.filter(p => p.id !== id);
+  saveLocalPaces();
+  renderPaceList();
+  try { await apiRequest('DELETE', `/workouts/${id}`); } catch(e){}
 }
 
 function setSyncStatus(msg, cls = '') {
@@ -228,89 +441,449 @@ function setSyncStatus(msg, cls = '') {
 }
 
 // ============================================================
-// 4. WORKOUT UTILITIES
+// 6. NAVIGATION
 // ============================================================
 
-function generateId() {
-  return 'w_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+  document.getElementById('screen-' + id)?.classList.add('active');
 }
 
-function formatTime(sec) {
-  const m = Math.floor(Math.abs(sec) / 60).toString().padStart(2, '0');
-  const s = (Math.abs(sec) % 60).toString().padStart(2, '0');
-  return `${m}:${s}`;
+// ============================================================
+// 7. HOME SCREEN
+// ============================================================
+
+function renderPaceList() {
+  const container = document.getElementById('pace-list');
+  if (!paces.length) {
+    container.innerHTML = `<div class="pace-empty">
+      <div class="pace-empty-title">No paces yet</div>
+      Tap <strong>+ New Pace</strong> to build your first guided rhythm.
+    </div>`;
+    return;
+  }
+  container.innerHTML = `<div class="pace-group-title">My Paces</div>
+    <div class="pace-group-body" id="pace-group-body"></div>`;
+  const body = document.getElementById('pace-group-body');
+  paces.forEach(pace => body.appendChild(makePaceCard(pace)));
 }
 
-function workoutMeta(w) {
-  if (w.type === 'sequence') {
-    const total = w.segments.reduce((a, s) => a + s.duration, 0);
-    return formatTime(total) + ' total';
-  }
-  const total = (w.warmupDuration || 0) + w.rounds * (w.workDuration + w.restDuration) - w.restDuration + (w.cooldownDuration || 0);
-  return `${w.rounds} rounds · ${formatTime(total)}`;
+function makePaceCard(pace) {
+  const btn = document.createElement('button');
+  btn.className = 'pace-card';
+  btn.innerHTML = `
+    <div class="pace-card-dots">${paceColorDots(pace)}</div>
+    <div class="pace-card-info">
+      <div class="pace-card-name">${escHtml(pace.name || 'Untitled Pace')}</div>
+      <div class="pace-card-meta">${paceMeta(pace)}</div>
+    </div>
+    <div class="pace-card-arrow">›</div>`;
+  btn.addEventListener('click', () => openBuilder(pace));
+  return btn;
 }
 
-/**
- * Convert a workout config into a flat array of timed segments.
- * Each segment gets roundIndex (for work phases) and totalRounds.
- */
-function buildSegments(workout) {
-  if (workout.type === 'sequence') {
-    let workCount = 0;
-    const totalWork = workout.segments.filter(s => s.phase === 'work').length;
-    return workout.segments.map(seg => ({
-      ...seg,
-      roundIndex: seg.phase === 'work' ? workCount++ : null,
-      totalRounds: totalWork,
-    }));
+// ============================================================
+// 8. TEMPLATE PICKER
+// ============================================================
+
+function showTemplatePicker() {
+  const container = document.getElementById('template-list');
+  container.innerHTML = '';
+  TEMPLATES.forEach(cat => {
+    const section = document.createElement('div');
+    section.className = 'template-category';
+    section.innerHTML = `<div class="template-category-title">${escHtml(cat.category)}</div>
+      <div class="template-cards"></div>`;
+    const cards = section.querySelector('.template-cards');
+    cat.items.forEach(tpl => {
+      const btn = document.createElement('button');
+      btn.className = 'template-card';
+      const dots = tpl.items ? flattenItems(tpl.items).slice(0,4).map(s =>
+        `<span class="template-card-dot" style="background:${colorHex(s.color)}"></span>`).join('') : '';
+      btn.innerHTML = `
+        <div class="template-card-dots">${dots}</div>
+        <div class="template-card-info">
+          <div class="template-card-name">${escHtml(tpl.name)}</div>
+          <div class="template-card-desc">${escHtml(tpl.description || '')}</div>
+        </div>
+        <span class="template-card-arrow">›</span>`;
+      btn.addEventListener('click', () => openBuilderFromTemplate(tpl));
+      cards.appendChild(btn);
+    });
+    container.appendChild(section);
+  });
+  showScreen('templates');
+}
+
+function openBuilderFromTemplate(tpl) {
+  // Deep clone the template items so edits don't mutate originals
+  const pace = {
+    id: genId(),
+    name: tpl.name,
+    items: JSON.parse(JSON.stringify(tpl.items)),
+    isNew: true,
+  };
+  // Re-generate IDs so each pace is independent
+  regenIds(pace.items);
+  openBuilder(pace);
+}
+
+function regenIds(items) {
+  items.forEach(item => {
+    item.id = genId();
+    if (item.type === 'group') regenIds(item.steps);
+    if (item.voiceCues) item.voiceCues.forEach(c => c.id = genId());
+  });
+}
+
+// ============================================================
+// 9. BUILDER
+// ============================================================
+
+function openBuilder(pace) {
+  editingPace = JSON.parse(JSON.stringify(pace));
+  editingPace.items = editingPace.items || [];
+  document.getElementById('builder-pace-name').value = editingPace.name || '';
+  const deleteBtn = document.getElementById('btn-delete-pace');
+  deleteBtn.style.visibility = editingPace.isNew ? 'hidden' : 'visible';
+  renderBuilder();
+  showScreen('builder');
+}
+
+function openBlankBuilder() {
+  editingPace = { id: genId(), name: '', items: [], isNew: true };
+  document.getElementById('builder-pace-name').value = '';
+  document.getElementById('btn-delete-pace').style.visibility = 'hidden';
+  renderBuilder();
+  showScreen('builder');
+}
+
+function renderBuilder() {
+  const container = document.getElementById('builder-content');
+  container.innerHTML = '';
+  const items = editingPace.items || [];
+
+  if (items.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'builder-empty';
+    empty.innerHTML = 'No steps yet.<br>Tap <strong>+ Step</strong> or <strong>+ Group</strong> below to begin.';
+    container.appendChild(empty);
+    return;
   }
 
-  // interval type
-  const segs = [];
-  if (workout.warmupDuration > 0) {
-    segs.push({ label: 'Warm-up', duration: workout.warmupDuration, phase: 'warmup', roundIndex: null, totalRounds: workout.rounds });
+  items.forEach((item, idx) => {
+    if (item.type === 'step') {
+      container.appendChild(buildStepCard(item, idx, null));
+    } else if (item.type === 'group') {
+      container.appendChild(buildGroupCard(item, idx));
+    }
+  });
+}
+
+// ---- Step Card ----
+
+function buildStepCard(step, itemIdx, groupIdx) {
+  const inGroup = groupIdx !== null;
+  const card = document.createElement('div');
+  card.className = inGroup ? 'step-card group-step' : 'step-card';
+  card.dataset.id = step.id;
+
+  const mins = Math.floor(step.duration / 60);
+  const secs = step.duration % 60;
+  const startCue = step.voiceCues?.[0] ?? null;
+  const extraCues = (step.voiceCues || []).slice(1);
+  const isSilent = !startCue || !startCue.text;
+
+  const extraCuesHtml = extraCues.map((cue, ci) => `
+    <div class="extra-cue-row" data-cue-idx="${ci + 1}">
+      <input type="number" class="extra-cue-offset" value="${cue.offsetSeconds}" min="0" placeholder="0" aria-label="Offset seconds">
+      <span class="extra-cue-label">s —</span>
+      <input type="text" class="extra-cue-text" value="${escHtml(cue.text || '')}" placeholder="What to say…">
+      <button class="extra-cue-del" aria-label="Remove voice cue">×</button>
+    </div>`).join('');
+
+  card.innerHTML = `
+    <div class="step-card-main">
+      <span class="step-color-dot" style="background:${colorHex(step.color)}" title="Change color"></span>
+      <input type="text" class="step-name-input" value="${escHtml(step.name)}" placeholder="Step name…" maxlength="40">
+      <div class="step-duration-wrap">
+        <input type="number" class="step-time-input" data-part="min" value="${mins}" min="0" max="99" aria-label="Minutes">
+        <span class="step-colon">:</span>
+        <input type="number" class="step-time-input" data-part="sec" value="${String(secs).padStart(2,'0')}" min="0" max="59" aria-label="Seconds">
+      </div>
+    </div>
+    <div class="step-card-actions">
+      <div class="step-voice-cue-row">
+        <span class="step-voice-icon ${isSilent ? 'silent' : ''}" title="${isSilent ? 'Silent — tap to add cue' : 'Voice cue — tap to edit'}">🔊</span>
+        <input type="text" class="step-voice-input" value="${escHtml(startCue?.text || '')}" placeholder="silent…" maxlength="120">
+        <button class="step-voice-clear" title="Clear cue">×</button>
+      </div>
+      <div class="step-secondary-actions">
+        ${!inGroup ? `
+          <button class="step-action-btn" data-action="up"  ${itemIdx === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
+          <button class="step-action-btn" data-action="down" ${itemIdx === (editingPace.items.length - 1) ? 'disabled' : ''} aria-label="Move down">↓</button>
+        ` : `
+          <button class="step-action-btn" data-action="up"  ${itemIdx === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
+          <button class="step-action-btn" data-action="down" aria-label="Move down">↓</button>
+        `}
+        <button class="step-action-btn" data-action="dup" aria-label="Duplicate">⊕</button>
+        <button class="step-action-btn danger" data-action="del" aria-label="Delete">×</button>
+      </div>
+    </div>
+    ${extraCues.length ? `<div class="step-extra-cues">${extraCuesHtml}</div>` : ''}
+    <button class="add-voice-cue-btn">+ Add Voice Cue</button>
+    <div class="color-picker hidden">
+      ${Object.entries(STEP_COLORS).map(([key, hex]) =>
+        `<span class="color-swatch ${step.color === key ? 'selected' : ''}" data-color="${key}" style="background:${hex}" title="${key}"></span>`
+      ).join('')}
+    </div>`;
+
+  // Wire up events
+  const nameInput = card.querySelector('.step-name-input');
+  const voiceInput = card.querySelector('.step-voice-input');
+  const voiceClear = card.querySelector('.step-voice-clear');
+  const voiceIcon  = card.querySelector('.step-voice-icon');
+  const colorDot   = card.querySelector('.step-color-dot');
+  const colorPicker = card.querySelector('.color-picker');
+
+  nameInput.addEventListener('input', () => { step.name = nameInput.value; });
+
+  // Duration
+  card.querySelectorAll('.step-time-input').forEach(inp => {
+    inp.addEventListener('change', () => {
+      const m = parseInt(card.querySelector('[data-part="min"]').value) || 0;
+      const s = Math.min(59, parseInt(card.querySelector('[data-part="sec"]').value) || 0);
+      step.duration = m * 60 + s;
+    });
+  });
+
+  // Start voice cue
+  if (!step.voiceCues) step.voiceCues = [];
+  if (!step.voiceCues[0]) step.voiceCues[0] = { id: genId(), offsetSeconds: 0, text: step.name };
+  voiceInput.addEventListener('input', () => {
+    step.voiceCues[0].text = voiceInput.value;
+    voiceIcon.classList.toggle('silent', !voiceInput.value.trim());
+  });
+  voiceClear.addEventListener('click', () => {
+    voiceInput.value = '';
+    step.voiceCues[0].text = '';
+    voiceIcon.classList.add('silent');
+  });
+
+  // Color picker
+  colorDot.addEventListener('click', () => colorPicker.classList.toggle('hidden'));
+  colorPicker.addEventListener('click', e => {
+    const sw = e.target.closest('.color-swatch');
+    if (!sw) return;
+    step.color = sw.dataset.color;
+    colorDot.style.background = colorHex(step.color);
+    colorPicker.querySelectorAll('.color-swatch').forEach(s => s.classList.toggle('selected', s.dataset.color === step.color));
+    colorPicker.classList.add('hidden');
+  });
+
+  // Extra cue events
+  const extraCuesContainer = card.querySelector('.step-extra-cues');
+  if (extraCuesContainer) wireExtraCues(extraCuesContainer, step);
+
+  // Add voice cue
+  card.querySelector('.add-voice-cue-btn').addEventListener('click', () => {
+    step.voiceCues.push({ id: genId(), offsetSeconds: 30, text: '' });
+    // re-render just this card in place
+    const parent = card.parentElement;
+    const newCard = buildStepCard(step, itemIdx, groupIdx);
+    parent.replaceChild(newCard, card);
+    newCard.querySelector('.step-extra-cues')?.lastElementChild?.querySelector('.extra-cue-text')?.focus();
+  });
+
+  // Action buttons
+  card.querySelectorAll('.step-action-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      syncBuilderState();
+      const action = btn.dataset.action;
+      if (inGroup) {
+        const group = editingPace.items[groupIdx];
+        const steps = group.steps;
+        handleStepAction(action, steps, itemIdx);
+      } else {
+        handleStepAction(action, editingPace.items, itemIdx);
+      }
+      renderBuilder();
+    });
+  });
+
+  return card;
+}
+
+function wireExtraCues(container, step) {
+  container.querySelectorAll('.extra-cue-row').forEach((row, ri) => {
+    const actualIdx = ri + 1; // offset by 1 since [0] is start cue
+    const offsetInput = row.querySelector('.extra-cue-offset');
+    const textInput = row.querySelector('.extra-cue-text');
+    const delBtn = row.querySelector('.extra-cue-del');
+
+    offsetInput.addEventListener('change', () => {
+      if (step.voiceCues[actualIdx]) step.voiceCues[actualIdx].offsetSeconds = parseInt(offsetInput.value) || 0;
+    });
+    textInput.addEventListener('input', () => {
+      if (step.voiceCues[actualIdx]) step.voiceCues[actualIdx].text = textInput.value;
+    });
+    delBtn.addEventListener('click', () => {
+      step.voiceCues.splice(actualIdx, 1);
+      row.remove();
+    });
+  });
+}
+
+function handleStepAction(action, arr, idx) {
+  switch(action) {
+    case 'up':   if (idx > 0) [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]]; break;
+    case 'down': if (idx < arr.length-1) [arr[idx], arr[idx+1]] = [arr[idx+1], arr[idx]]; break;
+    case 'dup':  arr.splice(idx+1, 0, JSON.parse(JSON.stringify(arr[idx]))); regenIds([arr[idx+1]]); break;
+    case 'del':  if (arr.length > 1) arr.splice(idx, 1); break;
   }
-  for (let i = 0; i < workout.rounds; i++) {
-    segs.push({ label: `Round ${i + 1}`, duration: workout.workDuration, phase: 'work', roundIndex: i, totalRounds: workout.rounds });
-    if (i < workout.rounds - 1) {
-      segs.push({ label: 'Rest', duration: workout.restDuration, phase: 'rest', roundIndex: i, totalRounds: workout.rounds });
+}
+
+// ---- Group Card ----
+
+function buildGroupCard(group, groupIdx) {
+  const card = document.createElement('div');
+  card.className = 'group-card';
+  card.dataset.id = group.id;
+
+  const header = document.createElement('div');
+  header.className = 'group-header';
+  header.innerHTML = `
+    <input type="text" class="group-name-input" value="${escHtml(group.name)}" placeholder="Group name…" maxlength="40">
+    <div class="group-repeats-wrap">
+      <input type="number" class="group-repeats-input" value="${group.repeats}" min="1" max="99" aria-label="Repeats">
+      <span class="group-repeats-x">×</span>
+      <span class="group-repeats-label">repeats</span>
+    </div>
+    <button class="step-action-btn danger group-del-btn" aria-label="Delete group">×</button>`;
+  card.appendChild(header);
+
+  header.querySelector('.group-name-input').addEventListener('input', e => { group.name = e.target.value; });
+  header.querySelector('.group-repeats-input').addEventListener('change', e => { group.repeats = parseInt(e.target.value) || 1; });
+  header.querySelector('.group-del-btn').addEventListener('click', () => {
+    if (confirm(`Remove group "${group.name || 'Group'}"?`)) {
+      syncBuilderState();
+      editingPace.items.splice(groupIdx, 1);
+      renderBuilder();
+    }
+  });
+
+  const body = document.createElement('div');
+  body.className = 'group-body';
+
+  if (!group.steps || group.steps.length === 0) {
+    const empty = document.createElement('div');
+    empty.className = 'group-empty';
+    empty.textContent = 'No steps. Add one below.';
+    body.appendChild(empty);
+  } else {
+    group.steps.forEach((step, stepIdx) => {
+      body.appendChild(buildStepCard(step, stepIdx, groupIdx));
+    });
+  }
+  card.appendChild(body);
+
+  const footer = document.createElement('div');
+  footer.className = 'group-footer';
+  const addBtn = document.createElement('button');
+  addBtn.className = 'add-to-group-btn';
+  addBtn.textContent = '+ Add Step';
+  addBtn.addEventListener('click', () => {
+    syncBuilderState();
+    group.steps.push(makeBlankStep());
+    renderBuilder();
+  });
+  footer.appendChild(addBtn);
+  card.appendChild(footer);
+
+  return card;
+}
+
+// ---- Sync state before mutations ----
+
+function syncBuilderState() {
+  // Sync name
+  editingPace.name = document.getElementById('builder-pace-name').value.trim();
+
+  // Sync step fields by matching IDs
+  document.querySelectorAll('.step-card').forEach(card => {
+    const id = card.dataset.id;
+    const step = findStepById(editingPace.items, id);
+    if (!step) return;
+
+    const nameEl = card.querySelector('.step-name-input');
+    const minEl  = card.querySelector('[data-part="min"]');
+    const secEl  = card.querySelector('[data-part="sec"]');
+    const voiceEl = card.querySelector('.step-voice-input');
+
+    if (nameEl) step.name = nameEl.value;
+    if (minEl && secEl) step.duration = (parseInt(minEl.value)||0)*60 + Math.min(59, parseInt(secEl.value)||0);
+    if (voiceEl && step.voiceCues?.[0]) step.voiceCues[0].text = voiceEl.value;
+  });
+
+  // Sync group fields
+  document.querySelectorAll('.group-card').forEach(card => {
+    const id = card.dataset.id;
+    const group = editingPace.items.find(i => i.id === id);
+    if (!group) return;
+    const nameEl = card.querySelector('.group-name-input');
+    const repEl  = card.querySelector('.group-repeats-input');
+    if (nameEl) group.name = nameEl.value;
+    if (repEl)  group.repeats = parseInt(repEl.value) || 1;
+  });
+}
+
+function findStepById(items, id) {
+  for (const item of items) {
+    if (item.type === 'step' && item.id === id) return item;
+    if (item.type === 'group') {
+      const found = item.steps.find(s => s.id === id);
+      if (found) return found;
     }
   }
-  if (workout.cooldownDuration > 0) {
-    segs.push({ label: 'Cool-down', duration: workout.cooldownDuration, phase: 'cooldown', roundIndex: null, totalRounds: workout.rounds });
-  }
-  return segs;
+  return null;
+}
+
+function savePaceFromBuilder() {
+  syncBuilderState();
+  editingPace.name = editingPace.name || 'My Pace';
+  editingPace.isNew = false;
+  delete editingPace.isNew;
+  return editingPace;
 }
 
 // ============================================================
-// 5. TIMER ENGINE
+// 10. TIMER ENGINE
 // ============================================================
 
-function startTimer(workout) {
-  activeWorkout   = workout;
-  activeSegments  = buildSegments(workout);
-  segmentIndex    = 0;
-  isPaused        = false;
-  workoutStartTime = Date.now();
+function startPace(pace) {
+  activePace     = pace;
+  flatSegments   = flattenItems(pace.items);
+  segmentIndex   = 0;
+  isPaused       = false;
   totalElapsedSeconds = 0;
 
-  showScreen('timer');
-  document.getElementById('timer-workout-name').textContent = workout.name;
+  if (!flatSegments.length) { alert('This pace has no steps.'); return; }
+
+  document.getElementById('timer-pace-name').textContent = pace.name || 'Pacer';
   buildOverallDots();
+  showScreen('timer');
   startSegment(0);
 }
 
-function startSegment(index) {
-  const seg = activeSegments[index];
-  if (!seg) { completeWorkout(); return; }
-
-  segmentIndex   = index;
+function startSegment(idx) {
+  const seg = flatSegments[idx];
+  if (!seg) { completePace(); return; }
+  segmentIndex    = idx;
   segmentDuration = seg.duration;
-  secondsLeft    = seg.duration;
+  secondsLeft     = seg.duration;
 
-  announcePhaseStart(seg);
+  speakSegmentStart(seg);
   updateTimerDisplay();
-  applyPhaseStyle(seg.phase);
   animatePhaseTransition();
 
   clearInterval(timerInterval);
@@ -319,29 +892,18 @@ function startSegment(index) {
 
 function tick() {
   if (isPaused) return;
-
   secondsLeft--;
   totalElapsedSeconds++;
 
-  // Countdown warnings
-  if (secondsLeft <= 5 && secondsLeft > 0 && segmentDuration > 10) {
-    speak(String(secondsLeft));
-  }
+  if (secondsLeft <= 5 && secondsLeft > 0 && segmentDuration > 10) speak(String(secondsLeft));
 
-  // Custom cues
-  checkCustomCues(segmentIndex, segmentDuration - secondsLeft);
-
-  // Update display
+  checkVoiceCues(segmentIndex, segmentDuration - secondsLeft);
   updateTimerDisplay();
 
-  // Advance segment
   if (secondsLeft <= 0) {
     segmentIndex++;
-    if (segmentIndex >= activeSegments.length) {
-      completeWorkout();
-    } else {
-      startSegment(segmentIndex);
-    }
+    if (segmentIndex >= flatSegments.length) completePace();
+    else startSegment(segmentIndex);
   }
 }
 
@@ -359,179 +921,70 @@ function resumeTimer() {
   timerInterval = setInterval(tick, 1000);
 }
 
-function restartTimer() {
+function restartPaceTimer() {
   clearInterval(timerInterval);
   isPaused = false;
   totalElapsedSeconds = 0;
-  workoutStartTime = Date.now();
   document.getElementById('btn-pause-resume').textContent = 'Pause';
   document.getElementById('timer-clock').classList.remove('paused');
   startSegment(0);
 }
 
-function endTimer() {
+function endPace() {
   clearInterval(timerInterval);
-  activeWorkout  = null;
-  activeSegments = [];
-  isPaused       = false;
+  activePace = null;
+  flatSegments = [];
+  isPaused = false;
 }
 
-function completeWorkout() {
+function completePace() {
   clearInterval(timerInterval);
-  speak('Workout complete! Great work!');
-
-  const name = activeWorkout ? activeWorkout.name : '';
-  document.getElementById('complete-name').textContent = name;
+  speak('Pace complete. Well done!');
+  document.getElementById('complete-name').textContent = activePace?.name || '';
   document.getElementById('complete-time').textContent = 'Total: ' + formatTime(totalElapsedSeconds);
-
   showScreen('complete');
 }
 
-// ============================================================
-// 6. SPEECH ENGINE
-// ============================================================
-
-const synth = window.speechSynthesis;
-
-// Populate voice picker once voices load (Chrome fires voiceschanged, others load synchronously)
-if (synth) {
-  synth.onvoiceschanged = () => populateVoicePicker();
-  // Also try immediately in case voices are already loaded (Firefox/Safari)
-  setTimeout(populateVoicePicker, 100);
-}
-
-function speak(text) {
-  if (!synth) return;
-  synth.cancel();
-  const utterance = new SpeechSynthesisUtterance(text);
-  utterance.rate   = 1.1;
-  utterance.pitch  = 1.0;
-  utterance.volume = 1.0;
-  // Apply selected voice
-  if (settings.voiceName) {
-    const voice = synth.getVoices().find(v => v.name === settings.voiceName);
-    if (voice) utterance.voice = voice;
-  }
-  synth.speak(utterance);
-}
-
-function announcePhaseStart(seg) {
-  const cues = (activeWorkout && activeWorkout.phaseCues) || {};
-  let text = '';
-  switch (seg.phase) {
-    case 'warmup':
-      text = cues.warmup || 'Warm up.';
-      break;
-    case 'cooldown':
-      text = cues.cooldown || 'Cool down.';
-      break;
-    case 'rest':
-      text = cues.rest || 'Rest.';
-      break;
-    case 'work': {
-      const cueText = cues.work || 'Begin!';
-      const isSequence = activeWorkout && activeWorkout.type === 'sequence';
-      if (isSequence) {
-        const num   = seg.roundIndex + 1;
-        const total = seg.totalRounds;
-        text = total > 1
-          ? `${seg.label} ${num} of ${total}. ${cueText}`
-          : `${seg.label}. ${cueText}`;
-      } else {
-        text = `Round ${seg.roundIndex + 1}. ${cueText}`;
-      }
-      break;
-    }
-    default:
-      text = 'Go!';
-  }
-  speak(text);
-}
-
-function checkCustomCues(segIdx, elapsedSeconds) {
-  if (!activeWorkout || !activeWorkout.cues) return;
-  const seg = activeSegments[segIdx];
-
-  activeWorkout.cues.forEach(cue => {
-    if (cue.phase !== seg.phase) return;
-    if (cue.offsetSeconds !== elapsedSeconds) return;
-
-    // Recurring → applies to all rounds; specific → match roundIndex
-    if (!cue.recurring && cue.roundIndex !== seg.roundIndex) return;
-
-    speak(cue.text);
-  });
-}
-
-// ============================================================
-// 7. TIMER DISPLAY
-// ============================================================
+// ---- Display ----
 
 function updateTimerDisplay() {
-  const seg = activeSegments[segmentIndex];
+  const seg = flatSegments[segmentIndex];
   if (!seg) return;
 
-  // Phase label (Round X of Y / Warm-up / etc.)
+  // Phase label: group info if applicable
   let phaseLabel = '';
-  if (seg.phase === 'warmup')    phaseLabel = 'WARM-UP';
-  else if (seg.phase === 'cooldown') phaseLabel = 'COOL-DOWN';
-  else if (seg.phase === 'rest') {
-    phaseLabel = 'REST';
-    if (seg.totalRounds > 1 && seg.roundIndex != null)
-      phaseLabel = `REST · AFTER ROUND ${seg.roundIndex + 1}`;
-  } else if (seg.phase === 'work') {
-    if (activeWorkout.type === 'sequence') {
-      phaseLabel = seg.totalRounds > 1
-        ? `${seg.label.toUpperCase()} · ${seg.roundIndex + 1} OF ${seg.totalRounds}`
-        : seg.label.toUpperCase();
-    } else {
-      phaseLabel = `ROUND ${seg.roundIndex + 1} OF ${seg.totalRounds}`;
-    }
+  if (seg._groupName && seg._totalRepeats > 1) {
+    phaseLabel = `${seg._groupName.toUpperCase()} — REPEAT ${seg._repeat} OF ${seg._totalRepeats}`;
+  } else if (seg._groupName) {
+    phaseLabel = seg._groupName.toUpperCase();
   }
-
   document.getElementById('timer-phase-label').textContent = phaseLabel;
+  document.getElementById('timer-step-name').textContent = seg.name;
   document.getElementById('timer-clock').textContent = formatTime(secondsLeft);
 
-  // Phase pill
-  const pill = document.getElementById('timer-phase-pill');
-  pill.textContent = { work: 'WORK', rest: 'REST', warmup: 'WARM-UP', cooldown: 'COOL-DOWN' }[seg.phase] || '';
-  pill.className   = `timer-phase-pill phase-${seg.phase}`;
-
-  // Progress bar (current segment)
-  const elapsed = seg.duration - secondsLeft;
-  const pct     = seg.duration > 0 ? (elapsed / seg.duration) * 100 : 100;
-  document.getElementById('timer-progress-fill').style.width = `${pct}%`;
+  // Progress bar
+  const elapsed = segmentDuration - secondsLeft;
+  document.getElementById('timer-progress-fill').style.width =
+    `${segmentDuration > 0 ? (elapsed / segmentDuration) * 100 : 100}%`;
 
   // Overall dots
-  const dots = document.querySelectorAll('.overall-dot');
-  dots.forEach((dot, i) => {
-    dot.classList.remove('done', 'active');
-    if (i < segmentIndex)      dot.classList.add('done');
+  document.querySelectorAll('.overall-dot').forEach((dot, i) => {
+    dot.classList.remove('done','active');
+    if (i < segmentIndex) dot.classList.add('done');
     else if (i === segmentIndex) dot.classList.add('active');
   });
 
-  // Next segment
-  const next = activeSegments[segmentIndex + 1];
-  const nextEl = document.getElementById('timer-next');
-  if (next) {
-    const nextName = next.phase === 'rest' ? 'Rest' :
-                     next.phase === 'work' ? (next.label || 'Work') :
-                     next.phase === 'cooldown' ? 'Cool-down' : next.label;
-    nextEl.textContent = `Next: ${nextName} · ${formatTime(next.duration)}`;
-  } else {
-    nextEl.textContent = 'Final segment';
-  }
-}
-
-function applyPhaseStyle(phase) {
-  document.getElementById('timer-progress-fill').className =
-    `timer-progress-fill phase-${phase}`;
+  // Next
+  const next = flatSegments[segmentIndex + 1];
+  document.getElementById('timer-next').textContent = next
+    ? `Next: ${next.name} · ${formatTime(next.duration)}`
+    : 'Final step';
 }
 
 function buildOverallDots() {
   const container = document.getElementById('timer-overall-progress');
   container.innerHTML = '';
-  const max = Math.min(activeSegments.length, 40); // cap at 40 dots to avoid clutter
+  const max = Math.min(flatSegments.length, 40);
   for (let i = 0; i < max; i++) {
     const dot = document.createElement('div');
     dot.className = 'overall-dot';
@@ -542,313 +995,49 @@ function buildOverallDots() {
 function animatePhaseTransition() {
   const body = document.querySelector('.timer-body');
   body.classList.remove('phase-transition');
-  void body.offsetWidth; // reflow to re-trigger animation
+  void body.offsetWidth;
   body.classList.add('phase-transition');
 }
 
 // ============================================================
-// 8. NAVIGATION
+// 11. SPEECH
 // ============================================================
 
-function showScreen(id) {
-  document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-  const target = document.getElementById('screen-' + id);
-  if (target) target.classList.add('active');
+const synth = window.speechSynthesis;
+
+if (synth) {
+  synth.onvoiceschanged = () => populateVoicePicker();
+  setTimeout(populateVoicePicker, 100);
 }
 
-// ============================================================
-// 9. HOME SCREEN
-// ============================================================
-
-function renderWorkoutList() {
-  const container = document.getElementById('workout-list');
-  container.innerHTML = '';
-
-  // --- Preset section ---
-  const presetSection = document.createElement('div');
-  presetSection.innerHTML = `<div class="workout-group-title">Workouts</div>`;
-  const presetBody = document.createElement('div');
-  presetBody.className = 'workout-group-body';
-  BUILTIN_PRESETS.forEach(w => presetBody.appendChild(makeWorkoutCard(w)));
-  presetSection.appendChild(presetBody);
-  container.appendChild(presetSection);
-
-  // --- C25K collapsible section ---
-  const c25kSection = document.createElement('div');
-  const toggleBtn = document.createElement('button');
-  toggleBtn.className = 'group-toggle';
-  toggleBtn.innerHTML = `<span class="group-toggle-label">Couch to 5K Program</span><span class="group-chevron">▼</span>`;
-  const c25kBody = document.createElement('div');
-  c25kBody.className = 'collapsible-group workout-group-body';
-  C25K_PRESETS.forEach(w => c25kBody.appendChild(makeWorkoutCard(w)));
-  toggleBtn.addEventListener('click', () => {
-    toggleBtn.classList.toggle('collapsed');
-    c25kBody.classList.toggle('collapsed');
-  });
-  c25kSection.appendChild(toggleBtn);
-  c25kSection.appendChild(c25kBody);
-  container.appendChild(c25kSection);
-
-  // --- Custom workouts ---
-  if (workouts.length > 0) {
-    const customSection = document.createElement('div');
-    customSection.innerHTML = `<div class="workout-group-title">My Workouts</div>`;
-    const customBody = document.createElement('div');
-    customBody.className = 'workout-group-body';
-    workouts.forEach(w => customBody.appendChild(makeWorkoutCard(w)));
-    customSection.appendChild(customBody);
-    container.appendChild(customSection);
+function speak(text) {
+  if (!synth || !text) return;
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance(text);
+  u.rate = 1.1; u.pitch = 1.0; u.volume = 1.0;
+  if (settings.voiceName) {
+    const voice = synth.getVoices().find(v => v.name === settings.voiceName);
+    if (voice) u.voice = voice;
   }
+  synth.speak(u);
 }
 
-function makeWorkoutCard(workout) {
-  const btn = document.createElement('button');
-  btn.className = 'workout-card';
-  btn.innerHTML = `
-    <div class="workout-card-info">
-      <div class="workout-card-name">${escHtml(workout.name)}</div>
-      <div class="workout-card-meta">${escHtml(workout.description || workoutMeta(workout))}</div>
-    </div>
-    <div class="workout-card-arrow">›</div>
-  `;
-  btn.addEventListener('click', () => showConfig(workout));
-  return btn;
+function speakSegmentStart(seg) {
+  const cue = seg.voiceCues?.[0];
+  const text = (cue && cue.text) ? cue.text : seg.name;
+  if (text) speak(text);
 }
 
-function escHtml(str) {
-  return String(str).replace(/[&<>"']/g, c =>
-    ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' })[c]);
-}
-
-// ============================================================
-// 10. CONFIG SCREEN
-// ============================================================
-
-function showConfig(workout) {
-  // Deep-copy so edits don't mutate the original preset
-  editingWorkout = JSON.parse(JSON.stringify(workout));
-  editingWorkout.cues = editingWorkout.cues || [];
-
-  document.getElementById('config-title').textContent = workout.name;
-
-  // Show delete button only for custom workouts
-  const deleteBtn = document.getElementById('btn-delete-workout');
-  deleteBtn.style.visibility = workout.isPreset ? 'hidden' : 'visible';
-
-  renderConfig();
-  showScreen('config');
-}
-
-function renderConfig() {
-  const w = editingWorkout;
-  const container = document.getElementById('config-content');
-  container.innerHTML = '';
-  const pc = w.phaseCues || {};
-
-  // Shared phase cue fields HTML
-  const cueFields = `
-    <div class="form-section-title" style="margin-top:16px">Phase Announcements</div>
-    <div class="form-group">
-      <label class="form-label">Warm-up cue</label>
-      <input type="text" class="form-input" id="cfg-cue-warmup" value="${escHtml(pc.warmup || 'Warm up.')}">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Work / jog cue</label>
-      <input type="text" class="form-input" id="cfg-cue-work" value="${escHtml(pc.work || 'Begin!')}">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Rest / walk cue</label>
-      <input type="text" class="form-input" id="cfg-cue-rest" value="${escHtml(pc.rest || 'Rest.')}">
-    </div>
-    <div class="form-group">
-      <label class="form-label">Cool-down cue</label>
-      <input type="text" class="form-input" id="cfg-cue-cooldown" value="${escHtml(pc.cooldown || 'Cool down.')}">
-    </div>`;
-
-  // Type toggle for new (non-preset) workouts
-  if (!w.isPreset) {
-    const typeCard = document.createElement('div');
-    typeCard.className = 'card type-toggle-wrap';
-    typeCard.innerHTML = `
-      <div class="form-section-title">Workout Type</div>
-      <div class="segmented-control">
-        <button class="seg-btn ${w.type === 'interval' ? 'active' : ''}" data-wtype="interval">Interval</button>
-        <button class="seg-btn ${w.type === 'sequence' ? 'active' : ''}" data-wtype="sequence">Custom Sequence</button>
-      </div>`;
-    typeCard.querySelector('.segmented-control').addEventListener('click', e => {
-      const btn = e.target.closest('.seg-btn[data-wtype]');
-      if (!btn || btn.dataset.wtype === w.type) return;
-      buildWorkoutFromConfig(); // save current values before switching
-      w.type = btn.dataset.wtype;
-      renderConfig();
-    });
-    container.appendChild(typeCard);
-  }
-
-  if (w.type === 'sequence') {
-    // Editable segment builder for custom sequences, read-only list for presets
-    const card = document.createElement('div');
-    card.className = 'card';
-    if (!w.isPreset) {
-      card.innerHTML = `<div class="form-section-title">Segments</div>
-        <div id="seg-list"></div>
-        <button class="btn btn-secondary" id="btn-add-segment" style="margin-top:12px;width:100%">+ Add Segment</button>
-        ${cueFields}`;
-      container.appendChild(card);
-      renderSegmentList();
-      card.querySelector('#btn-add-segment').addEventListener('click', addNewSegment);
-      // Name field for custom sequence
-      const nameCard = document.createElement('div');
-      nameCard.className = 'card';
-      nameCard.innerHTML = `
-        <div class="form-section-title">Workout Name</div>
-        <div class="form-group" style="margin-bottom:0">
-          <input type="text" class="form-input" id="cfg-name" value="${escHtml(w.name)}">
-        </div>`;
-      container.insertBefore(nameCard, container.firstChild.nextSibling || container.firstChild);
-    } else {
-      card.innerHTML = `<div class="form-section-title">Session Plan</div>
-        <ul class="segment-list">
-          ${w.segments.map(s => `
-            <li class="segment-item">
-              <span class="segment-dot phase-${s.phase}"></span>
-              <span class="segment-label">${escHtml(s.label)}</span>
-              <span class="segment-duration">${formatTime(s.duration)}</span>
-            </li>`).join('')}
-        </ul>
-        ${cueFields}`;
-      container.appendChild(card);
-    }
-
-  } else {
-    // Interval workout fields
-    const card = document.createElement('div');
-    card.className = 'card';
-    const nameField = w.isPreset ? '' : `
-      <div class="form-group">
-        <label class="form-label">Workout Name</label>
-        <input type="text" class="form-input" id="cfg-name" value="${escHtml(w.name)}">
-      </div>`;
-    card.innerHTML = `
-      <div class="form-section-title">Settings</div>
-      ${nameField}
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Warm-up (sec)</label>
-          <input type="number" class="form-input" id="cfg-warmup" value="${w.warmupDuration}" min="0">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Rounds</label>
-          <input type="number" class="form-input" id="cfg-rounds" value="${w.rounds}" min="1" max="99">
-        </div>
-      </div>
-      <div class="form-row">
-        <div class="form-group">
-          <label class="form-label">Work (sec)</label>
-          <input type="number" class="form-input" id="cfg-work" value="${w.workDuration}" min="5">
-        </div>
-        <div class="form-group">
-          <label class="form-label">Rest (sec)</label>
-          <input type="number" class="form-input" id="cfg-rest" value="${w.restDuration}" min="0">
-        </div>
-      </div>
-      <div class="form-group">
-        <label class="form-label">Cool-down (sec)</label>
-        <input type="number" class="form-input" id="cfg-cooldown" value="${w.cooldownDuration}" min="0">
-      </div>
-      ${cueFields}`;
-    container.appendChild(card);
-  }
-
-  // Custom cue summary
-  const cueCount = w.cues ? w.cues.length : 0;
-  const cueCard = document.createElement('div');
-  cueCard.className = 'card';
-  cueCard.innerHTML = `
-    <div class="form-section-title">Custom Cues</div>
-    <p style="font-size:14px;color:var(--text-muted)">
-      ${cueCount === 0 ? 'No custom cues added yet.' : `${cueCount} cue${cueCount > 1 ? 's' : ''} configured.`}
-    </p>`;
-  container.appendChild(cueCard);
-}
-
-function buildWorkoutFromConfig() {
-  const w = editingWorkout;
-  if (w.type === 'interval') {
-    const nameEl = document.getElementById('cfg-name');
-    if (nameEl) w.name = nameEl.value.trim() || w.name;
-    w.warmupDuration  = parseInt(document.getElementById('cfg-warmup').value)   || 0;
-    w.rounds          = parseInt(document.getElementById('cfg-rounds').value)    || 1;
-    w.workDuration    = parseInt(document.getElementById('cfg-work').value)      || 30;
-    w.restDuration    = parseInt(document.getElementById('cfg-rest').value)      || 0;
-    w.cooldownDuration= parseInt(document.getElementById('cfg-cooldown').value)  || 0;
-  } else if (w.type === 'sequence' && !w.isPreset) {
-    // Sync inline segment edits back to the workout data
-    const nameEl = document.getElementById('cfg-name');
-    if (nameEl) w.name = nameEl.value.trim() || w.name;
-    syncSegmentsFromBuilder();
-  }
-  // Read phase cues (present for both types)
-  const warmupEl = document.getElementById('cfg-cue-warmup');
-  if (warmupEl) {
-    w.phaseCues = {
-      warmup:   warmupEl.value.trim()                                        || 'Warm up.',
-      work:     document.getElementById('cfg-cue-work').value.trim()         || 'Begin!',
-      rest:     document.getElementById('cfg-cue-rest').value.trim()         || 'Rest.',
-      cooldown: document.getElementById('cfg-cue-cooldown').value.trim()     || 'Cool down.',
-    };
-  }
-  return w;
-}
-
-// ============================================================
-// 11. CUES EDITOR
-// ============================================================
-
-function showCueEditor() {
-  renderCues();
-  showScreen('cues');
-}
-
-function renderCues() {
-  const container = document.getElementById('cue-list');
-  const cues = editingWorkout.cues || [];
-  container.innerHTML = '';
-
-  if (cues.length === 0) {
-    container.innerHTML = '<div class="cue-empty">No cues yet. Add one below.</div>';
-    return;
-  }
-
-  cues.forEach((cue, idx) => {
-    const item = document.createElement('div');
-    item.className = 'cue-item';
-    const recurringText = cue.recurring
-      ? 'All rounds'
-      : `Round ${(cue.roundIndex || 0) + 1} only`;
-    item.innerHTML = `
-      <div class="cue-item-info">
-        <div class="cue-item-text">${escHtml(cue.text)}</div>
-        <div class="cue-item-meta">
-          <span class="cue-phase-tag phase-${cue.phase}">${cue.phase}</span>
-          · at ${cue.offsetSeconds}s · ${recurringText}
-        </div>
-      </div>
-      <button class="cue-delete-btn" data-idx="${idx}" aria-label="Delete cue">×</button>`;
-    container.appendChild(item);
-  });
-
-  container.querySelectorAll('.cue-delete-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
-      const i = parseInt(btn.dataset.idx);
-      editingWorkout.cues.splice(i, 1);
-      renderCues();
-    });
+function checkVoiceCues(segIdx, elapsedSeconds) {
+  const seg = flatSegments[segIdx];
+  if (!seg?.voiceCues) return;
+  seg.voiceCues.slice(1).forEach(cue => {
+    if (cue.offsetSeconds === elapsedSeconds && cue.text) speak(cue.text);
   });
 }
 
 // ============================================================
-// 12. SETTINGS UI
+// 12. SETTINGS
 // ============================================================
 
 function loadSettingsUI() {
@@ -864,16 +1053,14 @@ function saveSettingsFromUI() {
   settings.apiKey    = document.getElementById('settings-api-key').value.trim();
   settings.voiceName = document.getElementById('settings-voice').value;
   saveSettings();
-  syncWorkouts();
+  syncPaces();
 }
 
 function populateVoicePicker() {
   const select = document.getElementById('settings-voice');
   if (!select || !synth) return;
-  const voices = synth.getVoices()
-    .filter(v => v.lang.startsWith('en'))
-    .sort((a, b) => a.name.localeCompare(b.name));
-  if (voices.length === 0) return; // not loaded yet
+  const voices = synth.getVoices().filter(v => v.lang.startsWith('en')).sort((a,b) => a.name.localeCompare(b.name));
+  if (!voices.length) return;
   const current = settings.voiceName;
   select.innerHTML = '<option value="">Default voice</option>';
   voices.forEach(v => {
@@ -886,24 +1073,17 @@ function populateVoicePicker() {
 }
 
 function updateModeButtons(mode) {
-  document.querySelectorAll('.seg-btn').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.mode === mode);
-  });
+  document.querySelectorAll('.seg-btn').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
 }
-
 function updateThemeButtons(theme) {
-  document.querySelectorAll('.theme-swatch').forEach(btn => {
-    btn.classList.toggle('active', btn.dataset.theme === theme);
-  });
+  document.querySelectorAll('.theme-swatch').forEach(b => b.classList.toggle('active', b.dataset.theme === theme));
 }
-
 function applyTheme(theme) {
   settings.theme = theme;
   document.documentElement.setAttribute('data-theme', theme);
   updateThemeButtons(theme);
   saveSettings();
 }
-
 function applyMode(mode) {
   settings.mode = mode;
   document.documentElement.setAttribute('data-mode', mode);
@@ -915,343 +1095,110 @@ async function testApiConnection() {
   const url = document.getElementById('settings-api-url').value.trim();
   const key = document.getElementById('settings-api-key').value.trim();
   const statusEl = document.getElementById('api-status');
-  statusEl.textContent = 'Testing…';
-  statusEl.className = 'api-status';
+  statusEl.textContent = 'Testing…'; statusEl.className = 'api-status';
   try {
-    const res = await fetch(url.replace(/\/$/, '') + '/ping', {
-      headers: { 'X-API-Key': key },
-    });
-    if (res.ok) {
-      statusEl.textContent = '✓ Connected';
-      statusEl.className = 'api-status ok';
-    } else {
-      throw new Error(res.status);
-    }
-  } catch (e) {
-    statusEl.textContent = `✗ Failed — check URL and key (${e.message})`;
-    statusEl.className = 'api-status error';
-  }
+    const res = await fetch(url.replace(/\/$/, '') + '/ping', { headers: { 'X-API-Key': key } });
+    if (res.ok) { statusEl.textContent = '✓ Connected'; statusEl.className = 'api-status ok'; }
+    else throw new Error(res.status);
+  } catch(e) { statusEl.textContent = `✗ Failed (${e.message})`; statusEl.className = 'api-status error'; }
 }
 
 // ============================================================
-// 13b. SEGMENT BUILDER
-// ============================================================
-
-const PHASE_LABELS = { warmup: 'Warm-up', work: 'Work', rest: 'Rest', cooldown: 'Cool-down' };
-
-function renderSegmentList() {
-  const list = document.getElementById('seg-list');
-  if (!list) return;
-  const segs = editingWorkout.segments || [];
-
-  if (segs.length === 0) {
-    list.innerHTML = '<div class="seg-builder-empty">No segments yet. Add one below.</div>';
-    return;
-  }
-
-  list.innerHTML = segs.map((seg, idx) => {
-    const mins = Math.floor(seg.duration / 60);
-    const secs = seg.duration % 60;
-    return `
-      <div class="seg-row" data-idx="${idx}">
-        <div class="seg-row-top">
-          <span class="segment-dot phase-${seg.phase}" id="seg-dot-${idx}"></span>
-          <select class="seg-phase-select" data-idx="${idx}" aria-label="Phase">
-            ${['warmup','work','rest','cooldown'].map(p =>
-              `<option value="${p}" ${seg.phase === p ? 'selected' : ''}>${PHASE_LABELS[p]}</option>`
-            ).join('')}
-          </select>
-          <input type="text" class="seg-label-input" data-idx="${idx}"
-            value="${escHtml(seg.label)}" placeholder="Label" aria-label="Segment label">
-        </div>
-        <div class="seg-row-bottom">
-          <div class="seg-duration">
-            <input type="number" class="seg-time-input" data-idx="${idx}" data-part="min"
-              value="${mins}" min="0" max="99" aria-label="Minutes">
-            <span class="seg-colon">:</span>
-            <input type="number" class="seg-time-input" data-idx="${idx}" data-part="sec"
-              value="${String(secs).padStart(2,'0')}" min="0" max="59" aria-label="Seconds">
-            <span class="seg-time-label">m : s</span>
-          </div>
-          <div class="seg-actions">
-            <button class="seg-action-btn" data-action="up"  data-idx="${idx}" ${idx === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
-            <button class="seg-action-btn" data-action="down" data-idx="${idx}" ${idx === segs.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
-            <button class="seg-action-btn dup" data-action="dup" data-idx="${idx}" aria-label="Duplicate">⊕</button>
-            <button class="seg-action-btn danger" data-action="del" data-idx="${idx}" aria-label="Delete">×</button>
-          </div>
-        </div>
-      </div>`;
-  }).join('');
-
-  // Live sync: update data as user types (use event delegation on the list)
-  list.oninput = handleSegmentInput;
-  list.onchange = handleSegmentChange;
-  list.onclick = handleSegmentAction;
-}
-
-function handleSegmentInput(e) {
-  const idx = parseInt(e.target.dataset.idx);
-  if (isNaN(idx)) return;
-  const seg = editingWorkout.segments[idx];
-  if (!seg) return;
-
-  if (e.target.classList.contains('seg-label-input')) {
-    seg.label = e.target.value;
-  } else if (e.target.classList.contains('seg-time-input')) {
-    syncSegmentDuration(idx);
-  }
-}
-
-function handleSegmentChange(e) {
-  const idx = parseInt(e.target.dataset.idx);
-  if (isNaN(idx)) return;
-  const seg = editingWorkout.segments[idx];
-  if (!seg) return;
-
-  if (e.target.classList.contains('seg-phase-select')) {
-    seg.phase = e.target.value;
-    // Update the color dot
-    const dot = document.getElementById(`seg-dot-${idx}`);
-    if (dot) dot.className = `segment-dot phase-${seg.phase}`;
-    // Auto-update label to match phase if it was a default
-    const defaults = Object.values(PHASE_LABELS);
-    if (defaults.includes(seg.label)) {
-      seg.label = PHASE_LABELS[seg.phase];
-      const labelInput = document.querySelector(`.seg-label-input[data-idx="${idx}"]`);
-      if (labelInput) labelInput.value = seg.label;
-    }
-  }
-}
-
-function handleSegmentAction(e) {
-  const btn = e.target.closest('.seg-action-btn');
-  if (!btn || btn.disabled) return;
-  const idx    = parseInt(btn.dataset.idx);
-  const action = btn.dataset.action;
-  const segs   = editingWorkout.segments;
-
-  // Sync any pending duration changes before mutating
-  syncSegmentsFromBuilder();
-
-  switch (action) {
-    case 'up':
-      if (idx > 0) [segs[idx - 1], segs[idx]] = [segs[idx], segs[idx - 1]];
-      break;
-    case 'down':
-      if (idx < segs.length - 1) [segs[idx], segs[idx + 1]] = [segs[idx + 1], segs[idx]];
-      break;
-    case 'dup':
-      segs.splice(idx + 1, 0, { ...segs[idx] });
-      break;
-    case 'del':
-      if (segs.length > 1) segs.splice(idx, 1);
-      break;
-  }
-  renderSegmentList();
-}
-
-function syncSegmentDuration(idx) {
-  const minEl = document.querySelector(`.seg-time-input[data-idx="${idx}"][data-part="min"]`);
-  const secEl = document.querySelector(`.seg-time-input[data-idx="${idx}"][data-part="sec"]`);
-  if (!minEl || !secEl) return;
-  const mins = Math.max(0, parseInt(minEl.value) || 0);
-  const secs = Math.min(59, Math.max(0, parseInt(secEl.value) || 0));
-  editingWorkout.segments[idx].duration = mins * 60 + secs;
-}
-
-function syncSegmentsFromBuilder() {
-  const segs = editingWorkout.segments || [];
-  segs.forEach((_, idx) => {
-    const labelEl = document.querySelector(`.seg-label-input[data-idx="${idx}"]`);
-    const phaseEl = document.querySelector(`.seg-phase-select[data-idx="${idx}"]`);
-    if (labelEl) segs[idx].label = labelEl.value;
-    if (phaseEl) segs[idx].phase = phaseEl.value;
-    syncSegmentDuration(idx);
-  });
-}
-
-function addNewSegment() {
-  syncSegmentsFromBuilder();
-  const segs = editingWorkout.segments;
-  // Default to 'work' phase, or pick a sensible next phase
-  const lastPhase = segs.length > 0 ? segs[segs.length - 1].phase : 'warmup';
-  const nextPhase = lastPhase === 'warmup' ? 'work' : lastPhase === 'work' ? 'rest' : 'work';
-  segs.push({ label: PHASE_LABELS[nextPhase], duration: 60, phase: nextPhase });
-  renderSegmentList();
-  // Scroll to the new segment
-  const list = document.getElementById('seg-list');
-  if (list) list.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
-}
-
-// ============================================================
-// 13c. VOICE PICKER
-// ============================================================
-
-function showNewWorkout() {
-  editingWorkout = {
-    id:               generateId(),
-    name:             'My Workout',
-    type:             'interval',
-    isPreset:         false,
-    group:            'custom',
-    description:      '',
-    warmupDuration:   3 * M,
-    workDuration:     40,
-    restDuration:     20,
-    rounds:           8,
-    cooldownDuration: M,
-    // Default segments ready if user switches to custom sequence type
-    segments: [
-      { label: 'Warm-up', duration: 180, phase: 'warmup' },
-      { label: 'Work',    duration: 40,  phase: 'work'   },
-      { label: 'Rest',    duration: 20,  phase: 'rest'   },
-      { label: 'Cool-down', duration: 60, phase: 'cooldown' },
-    ],
-    phaseCues: { warmup: 'Warm up.', work: 'Begin!', rest: 'Rest.', cooldown: 'Cool down.' },
-    cues:      [],
-  };
-  document.getElementById('config-title').textContent = 'New Workout';
-  document.getElementById('btn-delete-workout').style.visibility = 'hidden';
-  renderConfig();
-  showScreen('config');
-}
-
-// ============================================================
-// 14. EVENT LISTENERS
+// 13. EVENT LISTENERS
 // ============================================================
 
 // Home
-document.getElementById('btn-settings').addEventListener('click', () => {
-  loadSettingsUI();
-  showScreen('settings');
+document.getElementById('btn-settings').addEventListener('click', () => { loadSettingsUI(); showScreen('settings'); });
+document.getElementById('btn-new-pace').addEventListener('click', showTemplatePicker);
+
+// Templates
+document.getElementById('btn-templates-back').addEventListener('click', () => showScreen('home'));
+document.getElementById('btn-blank-pace').addEventListener('click', openBlankBuilder);
+
+// Builder
+document.getElementById('btn-builder-back').addEventListener('click', () => {
+  const pace = savePaceFromBuilder();
+  persistPace(pace);
+  showScreen('home');
 });
-document.getElementById('btn-new-workout').addEventListener('click', showNewWorkout);
 
-// Config
-document.getElementById('btn-config-back').addEventListener('click', () => showScreen('home'));
-
-document.getElementById('btn-delete-workout').addEventListener('click', async () => {
-  if (!editingWorkout) return;
-  if (confirm(`Delete "${editingWorkout.name}"?`)) {
-    await deleteWorkout(editingWorkout.id);
+document.getElementById('btn-delete-pace').addEventListener('click', async () => {
+  if (!editingPace) return;
+  if (confirm(`Delete "${editingPace.name || 'this pace'}"?`)) {
+    await deletePace(editingPace.id);
     showScreen('home');
   }
 });
 
-document.getElementById('btn-manage-cues').addEventListener('click', () => {
-  buildWorkoutFromConfig(); // capture any edits first
-  showCueEditor();
+document.getElementById('btn-add-step-footer').addEventListener('click', () => {
+  syncBuilderState();
+  editingPace.items.push(makeBlankStep());
+  renderBuilder();
+  document.getElementById('builder-content').lastElementChild?.scrollIntoView({ behavior:'smooth', block:'nearest' });
 });
 
-document.getElementById('btn-start-workout').addEventListener('click', () => {
-  const workout = buildWorkoutFromConfig();
-  // Save custom workouts before starting
-  if (!workout.isPreset) persistWorkout(workout);
-  startTimer(workout);
+document.getElementById('btn-add-group-footer').addEventListener('click', () => {
+  syncBuilderState();
+  editingPace.items.push(makeBlankGroup());
+  renderBuilder();
+  document.getElementById('builder-content').lastElementChild?.scrollIntoView({ behavior:'smooth', block:'nearest' });
+});
+
+document.getElementById('btn-start-pace').addEventListener('click', () => {
+  const pace = savePaceFromBuilder();
+  persistPace(pace);
+  startPace(pace);
 });
 
 // Timer
-document.getElementById('btn-end-workout').addEventListener('click', () => {
-  if (confirm('End this workout?')) {
-    endTimer();
-    showScreen('home');
-  }
+document.getElementById('btn-end-pace').addEventListener('click', () => {
+  if (confirm('End this pace?')) { endPace(); showScreen('home'); }
 });
-
 document.getElementById('btn-pause-resume').addEventListener('click', () => {
-  if (isPaused) resumeTimer();
-  else pauseTimer();
+  if (isPaused) resumeTimer(); else pauseTimer();
 });
-
 document.getElementById('btn-restart').addEventListener('click', () => {
-  if (confirm('Restart from the beginning?')) restartTimer();
+  if (confirm('Restart from the beginning?')) restartPaceTimer();
 });
 
 // Complete
 document.getElementById('btn-complete-home').addEventListener('click', () => showScreen('home'));
 document.getElementById('btn-do-again').addEventListener('click', () => {
-  if (activeWorkout) startTimer(activeWorkout);
-  else showScreen('home');
-});
-
-// Cues
-document.getElementById('btn-cues-back').addEventListener('click', () => {
-  showConfig(editingWorkout); // go back to config with edits intact
-  showScreen('config');
-});
-
-document.getElementById('cue-recurring').addEventListener('change', function () {
-  const roundGroup = document.getElementById('cue-round-group');
-  roundGroup.style.display = this.value === 'specific' ? 'block' : 'none';
-});
-
-document.getElementById('btn-save-cue').addEventListener('click', () => {
-  const text = document.getElementById('cue-text').value.trim();
-  if (!text) { alert('Please enter a cue message.'); return; }
-
-  const phase    = document.getElementById('cue-phase').value;
-  const offset   = parseInt(document.getElementById('cue-offset').value) || 0;
-  const recurring = document.getElementById('cue-recurring').value === 'all';
-  const roundIdx = recurring ? null : (parseInt(document.getElementById('cue-round-index').value) - 1 || 0);
-
-  editingWorkout.cues = editingWorkout.cues || [];
-  editingWorkout.cues.push({ text, phase, offsetSeconds: offset, recurring, roundIndex: roundIdx });
-
-  // Clear form
-  document.getElementById('cue-text').value = '';
-  document.getElementById('cue-offset').value = '0';
-
-  renderCues();
+  if (activePace) startPace(activePace); else showScreen('home');
 });
 
 // Settings
 document.getElementById('btn-settings-back').addEventListener('click', () => showScreen('home'));
-
-document.getElementById('btn-save-settings').addEventListener('click', () => {
-  saveSettingsFromUI();
-  showScreen('home');
-});
-
+document.getElementById('btn-save-settings').addEventListener('click', () => { saveSettingsFromUI(); showScreen('home'); });
+document.getElementById('btn-test-api').addEventListener('click', testApiConnection);
 document.getElementById('btn-test-voice').addEventListener('click', () => {
   const name = document.getElementById('settings-voice').value;
   const prev = settings.voiceName;
-  settings.voiceName = name; // temporarily apply for test
-  speak('Round 1. Begin! Five, four, three, two, one.');
+  settings.voiceName = name;
+  speak('Step one. Begin! Five, four, three, two, one. Pace complete.');
   settings.voiceName = prev;
 });
-
-document.getElementById('btn-test-api').addEventListener('click', testApiConnection);
-
 document.getElementById('mode-toggle').addEventListener('click', e => {
-  const btn = e.target.closest('.seg-btn');
+  const btn = e.target.closest('.seg-btn[data-mode]');
   if (btn) applyMode(btn.dataset.mode);
 });
-
 document.getElementById('theme-grid').addEventListener('click', e => {
   const btn = e.target.closest('.theme-swatch');
   if (btn) applyTheme(btn.dataset.theme);
 });
 
 // ============================================================
-// 15. INIT
+// 14. INIT
 // ============================================================
 
 function init() {
   loadSettings();
   applyTheme(settings.theme);
   applyMode(settings.mode);
-
-  // Load local workouts immediately, then try to sync
-  workouts = loadLocalWorkouts();
-  renderWorkoutList();
-
-  // Attempt API sync in background
-  syncWorkouts();
-
-  // Register service worker for PWA
-  if ('serviceWorker' in navigator) {
-    navigator.serviceWorker.register('sw.js').catch(() => {});
-  }
+  paces = loadLocalPaces();
+  renderPaceList();
+  syncPaces();
+  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
 
 init();
