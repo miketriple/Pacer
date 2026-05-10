@@ -129,10 +129,11 @@ let workoutStartTime = 0;         // Date.now() when workout started (for elapse
 let totalElapsedSeconds = 0;      // accumulated across pauses
 
 let settings = {
-  theme:  'venom',
-  mode:   'system',
-  apiUrl: '',
-  apiKey: '',
+  theme:     'venom',
+  mode:      'system',
+  apiUrl:    '',
+  apiKey:    '',
+  voiceName: '',
 };
 
 // ============================================================
@@ -392,14 +393,25 @@ function completeWorkout() {
 
 const synth = window.speechSynthesis;
 
+// Populate voice picker once voices load (Chrome fires voiceschanged, others load synchronously)
+if (synth) {
+  synth.onvoiceschanged = () => populateVoicePicker();
+  // Also try immediately in case voices are already loaded (Firefox/Safari)
+  setTimeout(populateVoicePicker, 100);
+}
+
 function speak(text) {
   if (!synth) return;
-  // Cancel anything queued (don't cancel mid-utterance to avoid cutting off phase names)
-  // Small delay let the previous utterance finish naturally
+  synth.cancel();
   const utterance = new SpeechSynthesisUtterance(text);
   utterance.rate   = 1.1;
   utterance.pitch  = 1.0;
   utterance.volume = 1.0;
+  // Apply selected voice
+  if (settings.voiceName) {
+    const voice = synth.getVoices().find(v => v.name === settings.voiceName);
+    if (voice) utterance.voice = voice;
+  }
   synth.speak(utterance);
 }
 
@@ -653,31 +665,70 @@ function renderConfig() {
       <input type="text" class="form-input" id="cfg-cue-cooldown" value="${escHtml(pc.cooldown || 'Cool down.')}">
     </div>`;
 
+  // Type toggle for new (non-preset) workouts
+  if (!w.isPreset) {
+    const typeCard = document.createElement('div');
+    typeCard.className = 'card type-toggle-wrap';
+    typeCard.innerHTML = `
+      <div class="form-section-title">Workout Type</div>
+      <div class="segmented-control">
+        <button class="seg-btn ${w.type === 'interval' ? 'active' : ''}" data-wtype="interval">Interval</button>
+        <button class="seg-btn ${w.type === 'sequence' ? 'active' : ''}" data-wtype="sequence">Custom Sequence</button>
+      </div>`;
+    typeCard.querySelector('.segmented-control').addEventListener('click', e => {
+      const btn = e.target.closest('.seg-btn[data-wtype]');
+      if (!btn || btn.dataset.wtype === w.type) return;
+      buildWorkoutFromConfig(); // save current values before switching
+      w.type = btn.dataset.wtype;
+      renderConfig();
+    });
+    container.appendChild(typeCard);
+  }
+
   if (w.type === 'sequence') {
+    // Editable segment builder for custom sequences, read-only list for presets
     const card = document.createElement('div');
     card.className = 'card';
-    card.innerHTML = `<div class="form-section-title">Session Plan</div>
-      <ul class="segment-list">
-        ${w.segments.map(s => `
-          <li class="segment-item">
-            <span class="segment-dot phase-${s.phase}"></span>
-            <span class="segment-label">${escHtml(s.label)}</span>
-            <span class="segment-duration">${formatTime(s.duration)}</span>
-          </li>`).join('')}
-      </ul>
-      ${cueFields}`;
-    container.appendChild(card);
+    if (!w.isPreset) {
+      card.innerHTML = `<div class="form-section-title">Segments</div>
+        <div id="seg-list"></div>
+        <button class="btn btn-secondary" id="btn-add-segment" style="margin-top:12px;width:100%">+ Add Segment</button>
+        ${cueFields}`;
+      container.appendChild(card);
+      renderSegmentList();
+      card.querySelector('#btn-add-segment').addEventListener('click', addNewSegment);
+      // Name field for custom sequence
+      const nameCard = document.createElement('div');
+      nameCard.className = 'card';
+      nameCard.innerHTML = `
+        <div class="form-section-title">Workout Name</div>
+        <div class="form-group" style="margin-bottom:0">
+          <input type="text" class="form-input" id="cfg-name" value="${escHtml(w.name)}">
+        </div>`;
+      container.insertBefore(nameCard, container.firstChild.nextSibling || container.firstChild);
+    } else {
+      card.innerHTML = `<div class="form-section-title">Session Plan</div>
+        <ul class="segment-list">
+          ${w.segments.map(s => `
+            <li class="segment-item">
+              <span class="segment-dot phase-${s.phase}"></span>
+              <span class="segment-label">${escHtml(s.label)}</span>
+              <span class="segment-duration">${formatTime(s.duration)}</span>
+            </li>`).join('')}
+        </ul>
+        ${cueFields}`;
+      container.appendChild(card);
+    }
 
   } else {
+    // Interval workout fields
     const card = document.createElement('div');
     card.className = 'card';
-
     const nameField = w.isPreset ? '' : `
       <div class="form-group">
         <label class="form-label">Workout Name</label>
         <input type="text" class="form-input" id="cfg-name" value="${escHtml(w.name)}">
       </div>`;
-
     card.innerHTML = `
       <div class="form-section-title">Settings</div>
       ${nameField}
@@ -709,7 +760,7 @@ function renderConfig() {
     container.appendChild(card);
   }
 
-  // Cue summary
+  // Custom cue summary
   const cueCount = w.cues ? w.cues.length : 0;
   const cueCard = document.createElement('div');
   cueCard.className = 'card';
@@ -731,14 +782,22 @@ function buildWorkoutFromConfig() {
     w.workDuration    = parseInt(document.getElementById('cfg-work').value)      || 30;
     w.restDuration    = parseInt(document.getElementById('cfg-rest').value)      || 0;
     w.cooldownDuration= parseInt(document.getElementById('cfg-cooldown').value)  || 0;
+  } else if (w.type === 'sequence' && !w.isPreset) {
+    // Sync inline segment edits back to the workout data
+    const nameEl = document.getElementById('cfg-name');
+    if (nameEl) w.name = nameEl.value.trim() || w.name;
+    syncSegmentsFromBuilder();
   }
-  // Read phase cues for both interval and sequence workouts
-  w.phaseCues = {
-    warmup:   document.getElementById('cfg-cue-warmup').value.trim()   || 'Warm up.',
-    work:     document.getElementById('cfg-cue-work').value.trim()     || 'Begin!',
-    rest:     document.getElementById('cfg-cue-rest').value.trim()     || 'Rest.',
-    cooldown: document.getElementById('cfg-cue-cooldown').value.trim() || 'Cool down.',
-  };
+  // Read phase cues (present for both types)
+  const warmupEl = document.getElementById('cfg-cue-warmup');
+  if (warmupEl) {
+    w.phaseCues = {
+      warmup:   warmupEl.value.trim()                                        || 'Warm up.',
+      work:     document.getElementById('cfg-cue-work').value.trim()         || 'Begin!',
+      rest:     document.getElementById('cfg-cue-rest').value.trim()         || 'Rest.',
+      cooldown: document.getElementById('cfg-cue-cooldown').value.trim()     || 'Cool down.',
+    };
+  }
   return w;
 }
 
@@ -797,13 +856,33 @@ function loadSettingsUI() {
   document.getElementById('settings-api-key').value = settings.apiKey || '';
   updateModeButtons(settings.mode);
   updateThemeButtons(settings.theme);
+  populateVoicePicker();
 }
 
 function saveSettingsFromUI() {
-  settings.apiUrl = document.getElementById('settings-api-url').value.trim();
-  settings.apiKey = document.getElementById('settings-api-key').value.trim();
+  settings.apiUrl    = document.getElementById('settings-api-url').value.trim();
+  settings.apiKey    = document.getElementById('settings-api-key').value.trim();
+  settings.voiceName = document.getElementById('settings-voice').value;
   saveSettings();
   syncWorkouts();
+}
+
+function populateVoicePicker() {
+  const select = document.getElementById('settings-voice');
+  if (!select || !synth) return;
+  const voices = synth.getVoices()
+    .filter(v => v.lang.startsWith('en'))
+    .sort((a, b) => a.name.localeCompare(b.name));
+  if (voices.length === 0) return; // not loaded yet
+  const current = settings.voiceName;
+  select.innerHTML = '<option value="">Default voice</option>';
+  voices.forEach(v => {
+    const opt = document.createElement('option');
+    opt.value = v.name;
+    opt.textContent = `${v.name} (${v.lang})`;
+    if (v.name === current) opt.selected = true;
+    select.appendChild(opt);
+  });
 }
 
 function updateModeButtons(mode) {
@@ -855,7 +934,157 @@ async function testApiConnection() {
 }
 
 // ============================================================
-// 13. NEW CUSTOM WORKOUT
+// 13b. SEGMENT BUILDER
+// ============================================================
+
+const PHASE_LABELS = { warmup: 'Warm-up', work: 'Work', rest: 'Rest', cooldown: 'Cool-down' };
+
+function renderSegmentList() {
+  const list = document.getElementById('seg-list');
+  if (!list) return;
+  const segs = editingWorkout.segments || [];
+
+  if (segs.length === 0) {
+    list.innerHTML = '<div class="seg-builder-empty">No segments yet. Add one below.</div>';
+    return;
+  }
+
+  list.innerHTML = segs.map((seg, idx) => {
+    const mins = Math.floor(seg.duration / 60);
+    const secs = seg.duration % 60;
+    return `
+      <div class="seg-row" data-idx="${idx}">
+        <div class="seg-row-top">
+          <span class="segment-dot phase-${seg.phase}" id="seg-dot-${idx}"></span>
+          <select class="seg-phase-select" data-idx="${idx}" aria-label="Phase">
+            ${['warmup','work','rest','cooldown'].map(p =>
+              `<option value="${p}" ${seg.phase === p ? 'selected' : ''}>${PHASE_LABELS[p]}</option>`
+            ).join('')}
+          </select>
+          <input type="text" class="seg-label-input" data-idx="${idx}"
+            value="${escHtml(seg.label)}" placeholder="Label" aria-label="Segment label">
+        </div>
+        <div class="seg-row-bottom">
+          <div class="seg-duration">
+            <input type="number" class="seg-time-input" data-idx="${idx}" data-part="min"
+              value="${mins}" min="0" max="99" aria-label="Minutes">
+            <span class="seg-colon">:</span>
+            <input type="number" class="seg-time-input" data-idx="${idx}" data-part="sec"
+              value="${String(secs).padStart(2,'0')}" min="0" max="59" aria-label="Seconds">
+            <span class="seg-time-label">m : s</span>
+          </div>
+          <div class="seg-actions">
+            <button class="seg-action-btn" data-action="up"  data-idx="${idx}" ${idx === 0 ? 'disabled' : ''} aria-label="Move up">↑</button>
+            <button class="seg-action-btn" data-action="down" data-idx="${idx}" ${idx === segs.length - 1 ? 'disabled' : ''} aria-label="Move down">↓</button>
+            <button class="seg-action-btn dup" data-action="dup" data-idx="${idx}" aria-label="Duplicate">⊕</button>
+            <button class="seg-action-btn danger" data-action="del" data-idx="${idx}" aria-label="Delete">×</button>
+          </div>
+        </div>
+      </div>`;
+  }).join('');
+
+  // Live sync: update data as user types (use event delegation on the list)
+  list.oninput = handleSegmentInput;
+  list.onchange = handleSegmentChange;
+  list.onclick = handleSegmentAction;
+}
+
+function handleSegmentInput(e) {
+  const idx = parseInt(e.target.dataset.idx);
+  if (isNaN(idx)) return;
+  const seg = editingWorkout.segments[idx];
+  if (!seg) return;
+
+  if (e.target.classList.contains('seg-label-input')) {
+    seg.label = e.target.value;
+  } else if (e.target.classList.contains('seg-time-input')) {
+    syncSegmentDuration(idx);
+  }
+}
+
+function handleSegmentChange(e) {
+  const idx = parseInt(e.target.dataset.idx);
+  if (isNaN(idx)) return;
+  const seg = editingWorkout.segments[idx];
+  if (!seg) return;
+
+  if (e.target.classList.contains('seg-phase-select')) {
+    seg.phase = e.target.value;
+    // Update the color dot
+    const dot = document.getElementById(`seg-dot-${idx}`);
+    if (dot) dot.className = `segment-dot phase-${seg.phase}`;
+    // Auto-update label to match phase if it was a default
+    const defaults = Object.values(PHASE_LABELS);
+    if (defaults.includes(seg.label)) {
+      seg.label = PHASE_LABELS[seg.phase];
+      const labelInput = document.querySelector(`.seg-label-input[data-idx="${idx}"]`);
+      if (labelInput) labelInput.value = seg.label;
+    }
+  }
+}
+
+function handleSegmentAction(e) {
+  const btn = e.target.closest('.seg-action-btn');
+  if (!btn || btn.disabled) return;
+  const idx    = parseInt(btn.dataset.idx);
+  const action = btn.dataset.action;
+  const segs   = editingWorkout.segments;
+
+  // Sync any pending duration changes before mutating
+  syncSegmentsFromBuilder();
+
+  switch (action) {
+    case 'up':
+      if (idx > 0) [segs[idx - 1], segs[idx]] = [segs[idx], segs[idx - 1]];
+      break;
+    case 'down':
+      if (idx < segs.length - 1) [segs[idx], segs[idx + 1]] = [segs[idx + 1], segs[idx]];
+      break;
+    case 'dup':
+      segs.splice(idx + 1, 0, { ...segs[idx] });
+      break;
+    case 'del':
+      if (segs.length > 1) segs.splice(idx, 1);
+      break;
+  }
+  renderSegmentList();
+}
+
+function syncSegmentDuration(idx) {
+  const minEl = document.querySelector(`.seg-time-input[data-idx="${idx}"][data-part="min"]`);
+  const secEl = document.querySelector(`.seg-time-input[data-idx="${idx}"][data-part="sec"]`);
+  if (!minEl || !secEl) return;
+  const mins = Math.max(0, parseInt(minEl.value) || 0);
+  const secs = Math.min(59, Math.max(0, parseInt(secEl.value) || 0));
+  editingWorkout.segments[idx].duration = mins * 60 + secs;
+}
+
+function syncSegmentsFromBuilder() {
+  const segs = editingWorkout.segments || [];
+  segs.forEach((_, idx) => {
+    const labelEl = document.querySelector(`.seg-label-input[data-idx="${idx}"]`);
+    const phaseEl = document.querySelector(`.seg-phase-select[data-idx="${idx}"]`);
+    if (labelEl) segs[idx].label = labelEl.value;
+    if (phaseEl) segs[idx].phase = phaseEl.value;
+    syncSegmentDuration(idx);
+  });
+}
+
+function addNewSegment() {
+  syncSegmentsFromBuilder();
+  const segs = editingWorkout.segments;
+  // Default to 'work' phase, or pick a sensible next phase
+  const lastPhase = segs.length > 0 ? segs[segs.length - 1].phase : 'warmup';
+  const nextPhase = lastPhase === 'warmup' ? 'work' : lastPhase === 'work' ? 'rest' : 'work';
+  segs.push({ label: PHASE_LABELS[nextPhase], duration: 60, phase: nextPhase });
+  renderSegmentList();
+  // Scroll to the new segment
+  const list = document.getElementById('seg-list');
+  if (list) list.lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+}
+
+// ============================================================
+// 13c. VOICE PICKER
 // ============================================================
 
 function showNewWorkout() {
@@ -871,8 +1100,15 @@ function showNewWorkout() {
     restDuration:     20,
     rounds:           8,
     cooldownDuration: M,
-    phaseCues:        { warmup: 'Warm up.', work: 'Begin!', rest: 'Rest.', cooldown: 'Cool down.' },
-    cues:             [],
+    // Default segments ready if user switches to custom sequence type
+    segments: [
+      { label: 'Warm-up', duration: 180, phase: 'warmup' },
+      { label: 'Work',    duration: 40,  phase: 'work'   },
+      { label: 'Rest',    duration: 20,  phase: 'rest'   },
+      { label: 'Cool-down', duration: 60, phase: 'cooldown' },
+    ],
+    phaseCues: { warmup: 'Warm up.', work: 'Begin!', rest: 'Rest.', cooldown: 'Cool down.' },
+    cues:      [],
   };
   document.getElementById('config-title').textContent = 'New Workout';
   document.getElementById('btn-delete-workout').style.visibility = 'hidden';
@@ -974,6 +1210,14 @@ document.getElementById('btn-settings-back').addEventListener('click', () => sho
 document.getElementById('btn-save-settings').addEventListener('click', () => {
   saveSettingsFromUI();
   showScreen('home');
+});
+
+document.getElementById('btn-test-voice').addEventListener('click', () => {
+  const name = document.getElementById('settings-voice').value;
+  const prev = settings.voiceName;
+  settings.voiceName = name; // temporarily apply for test
+  speak('Round 1. Begin! Five, four, three, two, one.');
+  settings.voiceName = prev;
 });
 
 document.getElementById('btn-test-api').addEventListener('click', testApiConnection);

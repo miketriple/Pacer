@@ -9,6 +9,8 @@
   <meta name="description" content="Interval timer for boxing, running, jump rope, and more.">
   <title>Pacer</title>
   <link rel="manifest" href="manifest.json">
+  <link rel="icon" type="image/png" sizes="192x192" href="icons/icon-192.png">
+  <link rel="apple-touch-icon" href="icons/icon-192.png">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;500;600;700&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
@@ -211,6 +213,17 @@
             </button>
           </div>
         </div>
+      </section>
+
+      <section class="settings-section">
+        <h3 class="settings-heading">Voice</h3>
+        <div class="form-group">
+          <label class="form-label">Announcement voice</label>
+          <select class="form-input" id="settings-voice">
+            <option value="">Default voice</option>
+          </select>
+        </div>
+        <button class="btn btn-secondary" id="btn-test-voice">Test Voice</button>
       </section>
 
       <section class="settings-section">

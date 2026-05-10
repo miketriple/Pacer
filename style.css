@@ -947,6 +947,147 @@ body {
 .api-status.error { color: #ff6666; }
 
 /* ============================================================
+   SEGMENT BUILDER
+   ============================================================ */
+
+.seg-row {
+  padding: 10px 0;
+  border-bottom: 1px solid var(--border);
+}
+.seg-row:last-child { border-bottom: none; }
+
+.seg-row-top {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 8px;
+}
+
+.seg-phase-select {
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 8px;
+  color: var(--text);
+  font-size: 13px;
+  width: 100px;
+  flex-shrink: 0;
+  -webkit-appearance: none;
+}
+.seg-phase-select:focus {
+  outline: none;
+  border-color: var(--accent);
+}
+
+.seg-label-input {
+  flex: 1;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 10px;
+  color: var(--text);
+  font-size: 14px;
+  min-width: 0;
+}
+.seg-label-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+
+.seg-row-bottom {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.seg-duration {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.seg-time-input {
+  width: 46px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 6px 6px;
+  color: var(--text);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 14px;
+  text-align: center;
+  -webkit-appearance: none;
+}
+.seg-time-input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 2px var(--accent-dim);
+}
+
+.seg-colon {
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 16px;
+  color: var(--text-muted);
+}
+
+.seg-time-label {
+  font-size: 11px;
+  color: var(--text-muted);
+}
+
+.seg-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.seg-action-btn {
+  width: 32px;
+  height: 32px;
+  border-radius: 8px;
+  background: var(--surface2);
+  border: 1px solid var(--border);
+  color: var(--text-muted);
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all var(--transition);
+  flex-shrink: 0;
+}
+.seg-action-btn:hover:not(:disabled) {
+  background: var(--surface3);
+  color: var(--text);
+}
+.seg-action-btn:disabled {
+  opacity: 0.3;
+  cursor: default;
+}
+.seg-action-btn.danger:hover:not(:disabled) {
+  background: rgba(255, 60, 60, 0.15);
+  color: #ff4444;
+  border-color: rgba(255, 60, 60, 0.3);
+}
+.seg-action-btn.dup:hover:not(:disabled) {
+  background: var(--accent-dim);
+  color: var(--accent);
+  border-color: var(--accent);
+}
+
+.seg-builder-empty {
+  text-align: center;
+  color: var(--text-muted);
+  font-size: 14px;
+  padding: 20px 0;
+}
+
+/* Workout type toggle (shown for new/custom workouts) */
+.type-toggle-wrap {
+  margin-bottom: 0;
+}
+
+/* ============================================================
    PHASE TRANSITION ANIMATION
    ============================================================ */
 
