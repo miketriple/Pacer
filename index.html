@@ -1,9 +1,244 @@
 <!DOCTYPE html>
-<html>
+<html lang="en" data-theme="venom" data-mode="system">
 <head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="apple-mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta name="apple-mobile-web-app-title" content="Pacer">
+  <meta name="description" content="Interval timer for boxing, running, jump rope, and more.">
   <title>Pacer</title>
+  <link rel="manifest" href="manifest.json">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;500;600;700&family=Barlow:wght@300;400;500&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
-  <h1>Pacer site works!</h1>
+
+  <!-- ==============================
+       SCREEN: HOME (Workout List)
+       ============================== -->
+  <div id="screen-home" class="screen active">
+    <header class="app-header">
+      <div class="logo">PACER</div>
+      <button class="icon-btn" id="btn-settings" aria-label="Settings">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="3"/>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+        </svg>
+      </button>
+    </header>
+    <div class="screen-content">
+      <div id="sync-status" class="sync-status"></div>
+      <div id="workout-list" class="workout-list">
+        <!-- Populated by JS -->
+      </div>
+    </div>
+    <div class="screen-footer">
+      <button class="btn btn-accent" id="btn-new-workout">+ New Workout</button>
+    </div>
+  </div>
+
+  <!-- ==============================
+       SCREEN: CONFIGURE WORKOUT
+       ============================== -->
+  <div id="screen-config" class="screen">
+    <header class="app-header">
+      <button class="icon-btn" id="btn-config-back" aria-label="Back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div class="header-title" id="config-title">Configure</div>
+      <button class="icon-btn danger-btn" id="btn-delete-workout" aria-label="Delete workout" style="visibility:hidden">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14H6L5 6"/><path d="M10 11v6M14 11v6"/><path d="M9 6V4h6v2"/>
+        </svg>
+      </button>
+    </header>
+    <div class="screen-content" id="config-content">
+      <!-- Populated by JS -->
+    </div>
+    <div class="screen-footer">
+      <button class="btn btn-secondary" id="btn-manage-cues">Manage Cues</button>
+      <button class="btn btn-accent" id="btn-start-workout">Start Workout</button>
+    </div>
+  </div>
+
+  <!-- ==============================
+       SCREEN: ACTIVE TIMER
+       ============================== -->
+  <div id="screen-timer" class="screen">
+    <header class="app-header timer-header">
+      <div class="logo-small">PACER</div>
+      <button class="text-btn danger-text" id="btn-end-workout">End</button>
+    </header>
+    <div class="timer-body">
+      <div class="timer-workout-name" id="timer-workout-name"></div>
+      <div class="timer-phase-label" id="timer-phase-label">ROUND 1 OF 12</div>
+      <div class="timer-clock-wrap">
+        <div class="timer-clock" id="timer-clock">00:00</div>
+      </div>
+      <div class="timer-phase-pill" id="timer-phase-pill">WORK</div>
+      <div class="timer-progress-wrap">
+        <div class="timer-progress-bar">
+          <div class="timer-progress-fill" id="timer-progress-fill"></div>
+        </div>
+      </div>
+      <div class="timer-overall-progress" id="timer-overall-progress"></div>
+      <div class="timer-next" id="timer-next">Next: Rest · 1:00</div>
+    </div>
+    <div class="timer-controls">
+      <button class="btn btn-secondary" id="btn-restart">↺ Restart</button>
+      <button class="btn btn-accent btn-large" id="btn-pause-resume">Pause</button>
+    </div>
+  </div>
+
+  <!-- ==============================
+       SCREEN: WORKOUT COMPLETE
+       ============================== -->
+  <div id="screen-complete" class="screen">
+    <div class="complete-body">
+      <div class="complete-check">✓</div>
+      <div class="complete-title">Workout Complete!</div>
+      <div class="complete-name" id="complete-name"></div>
+      <div class="complete-time" id="complete-time"></div>
+      <div class="complete-actions">
+        <button class="btn btn-secondary" id="btn-do-again">Do Again</button>
+        <button class="btn btn-accent" id="btn-complete-home">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==============================
+       SCREEN: CUSTOM CUES EDITOR
+       ============================== -->
+  <div id="screen-cues" class="screen">
+    <header class="app-header">
+      <button class="icon-btn" id="btn-cues-back" aria-label="Back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div class="header-title">Custom Cues</div>
+      <div style="width:40px"></div>
+    </header>
+    <div class="screen-content">
+      <p class="screen-hint">Cues are spoken aloud at the time offset you specify within a phase. They can repeat every round, or fire just once.</p>
+      <div id="cue-list" class="cue-list"></div>
+      <div class="cue-form card" id="cue-form">
+        <h4 class="form-section-title">Add a Cue</h4>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Phase</label>
+            <select class="form-input" id="cue-phase">
+              <option value="warmup">Warm-up</option>
+              <option value="work" selected>Work / Jog</option>
+              <option value="rest">Rest / Walk</option>
+              <option value="cooldown">Cool-down</option>
+            </select>
+          </div>
+          <div class="form-group">
+            <label class="form-label">At second</label>
+            <input type="number" class="form-input" id="cue-offset" value="0" min="0" placeholder="0">
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Message</label>
+          <input type="text" class="form-input" id="cue-text" placeholder="e.g. Keep your hands up!">
+        </div>
+        <div class="form-row">
+          <div class="form-group">
+            <label class="form-label">Applies to</label>
+            <select class="form-input" id="cue-recurring">
+              <option value="all">All rounds</option>
+              <option value="specific">Specific round</option>
+            </select>
+          </div>
+          <div class="form-group" id="cue-round-group" style="display:none">
+            <label class="form-label">Round #</label>
+            <input type="number" class="form-input" id="cue-round-index" value="1" min="1" placeholder="1">
+          </div>
+        </div>
+        <button class="btn btn-accent" id="btn-save-cue">Save Cue</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ==============================
+       SCREEN: SETTINGS
+       ============================== -->
+  <div id="screen-settings" class="screen">
+    <header class="app-header">
+      <button class="icon-btn" id="btn-settings-back" aria-label="Back">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M19 12H5M12 19l-7-7 7-7"/>
+        </svg>
+      </button>
+      <div class="header-title">Settings</div>
+      <div style="width:40px"></div>
+    </header>
+    <div class="screen-content">
+
+      <section class="settings-section">
+        <h3 class="settings-heading">Appearance</h3>
+        <div class="settings-row">
+          <span class="settings-label">Mode</span>
+          <div class="segmented-control" id="mode-toggle">
+            <button class="seg-btn" data-mode="light">Light</button>
+            <button class="seg-btn" data-mode="system">System</button>
+            <button class="seg-btn" data-mode="dark">Dark</button>
+          </div>
+        </div>
+        <div class="settings-row settings-row-col">
+          <span class="settings-label">Theme</span>
+          <div class="theme-grid" id="theme-grid">
+            <button class="theme-swatch active" data-theme="venom">
+              <span class="swatch-dot" style="background:#39ff14"></span>Venom
+            </button>
+            <button class="theme-swatch" data-theme="ember">
+              <span class="swatch-dot" style="background:#ff4500"></span>Ember
+            </button>
+            <button class="theme-swatch" data-theme="dusk">
+              <span class="swatch-dot" style="background:#b44fff"></span>Dusk
+            </button>
+            <button class="theme-swatch" data-theme="arctic">
+              <span class="swatch-dot" style="background:#00d4ff"></span>Arctic
+            </button>
+            <button class="theme-swatch" data-theme="chalk">
+              <span class="swatch-dot" style="background:#d0d0d0"></span>Chalk
+            </button>
+          </div>
+        </div>
+      </section>
+
+      <section class="settings-section">
+        <h3 class="settings-heading">Sync</h3>
+        <p class="settings-note">Connect to your Pacer API to sync workouts across devices. Leave blank to use local storage only.</p>
+        <div class="form-group">
+          <label class="form-label">API URL</label>
+          <input type="url" class="form-input" id="settings-api-url" placeholder="https://api.the12414.com">
+        </div>
+        <div class="form-group">
+          <label class="form-label">API Key</label>
+          <input type="password" class="form-input" id="settings-api-key" placeholder="Your shared API key">
+        </div>
+        <button class="btn btn-secondary" id="btn-test-api">Test Connection</button>
+        <div class="api-status" id="api-status"></div>
+      </section>
+
+      <section class="settings-section">
+        <h3 class="settings-heading">About</h3>
+        <p class="settings-note">Pacer — Interval Timer<br>pacer.the12414.com</p>
+      </section>
+
+    </div>
+    <div class="screen-footer">
+      <button class="btn btn-accent" id="btn-save-settings">Save Settings</button>
+    </div>
+  </div>
+
+  <script src="app.js"></script>
 </body>
 </html>
