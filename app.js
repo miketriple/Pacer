@@ -366,6 +366,7 @@ function paceColorDots(pace) {
 
 /** Flatten items (steps + groups) into a sequential list of steps for the timer */
 function flattenItems(items) {
+  if (!Array.isArray(items)) return [];
   const result = [];
   for (const item of items) {
     if (item.type === 'step') {
@@ -391,7 +392,11 @@ function loadSettings() {
 function saveSettings() { localStorage.setItem('pacer_settings', JSON.stringify(settings)); }
 
 function loadLocalPaces() {
-  try { const s = localStorage.getItem('pacer_paces'); return s ? JSON.parse(s) : []; } catch(e){ return []; }
+  try {
+    const s = localStorage.getItem('pacer_paces');
+    if (!s) return [];
+    return JSON.parse(s).map(migratePace);
+  } catch(e){ return []; }
 }
 function saveLocalPaces() { localStorage.setItem('pacer_paces', JSON.stringify(paces)); }
 
@@ -405,12 +410,48 @@ async function apiRequest(method, path, body = null) {
   return res.json();
 }
 
+/** Migrate a pace from the old data format to the new items-based format */
+function migratePace(pace) {
+  if (Array.isArray(pace.items)) return pace; // already new format
+  // Old format had segments[] or type:'interval' — convert to a flat step list
+  const items = [];
+  if (Array.isArray(pace.segments)) {
+    pace.segments.forEach(seg => {
+      items.push({
+        type: 'step', id: genId(),
+        name: seg.label || 'Step',
+        duration: seg.duration || 60,
+        color: seg.phase === 'work' ? 'red' : seg.phase === 'rest' ? 'blue' :
+               seg.phase === 'warmup' ? 'yellow' : seg.phase === 'cooldown' ? 'teal' : DEFAULT_COLOR,
+        voiceCues: [{ id: genId(), offsetSeconds: 0, text: seg.label || 'Step' }],
+      });
+    });
+  } else if (pace.type === 'interval') {
+    if (pace.warmupDuration > 0)
+      items.push({ type:'step', id:genId(), name:'Warm Up', duration:pace.warmupDuration, color:'yellow', voiceCues:[{id:genId(),offsetSeconds:0,text:'Warm up.'}] });
+    const groupSteps = [];
+    groupSteps.push({ type:'step', id:genId(), name:'Work', duration:pace.workDuration||40, color:'red', voiceCues:[{id:genId(),offsetSeconds:0,text:'Begin!'}] });
+    if (pace.restDuration > 0)
+      groupSteps.push({ type:'step', id:genId(), name:'Rest', duration:pace.restDuration, color:'blue', voiceCues:[{id:genId(),offsetSeconds:0,text:'Rest.'}] });
+    items.push({ type:'group', id:genId(), name:'Round', repeats:pace.rounds||1, steps:groupSteps });
+    if (pace.cooldownDuration > 0)
+      items.push({ type:'step', id:genId(), name:'Cool Down', duration:pace.cooldownDuration, color:'teal', voiceCues:[{id:genId(),offsetSeconds:0,text:'Cool down.'}] });
+  }
+  return { ...pace, items, type: 'custom' };
+}
+
+// Track IDs pending deletion to prevent sync from restoring them
+const pendingDeletes = new Set();
+
 async function syncPaces() {
   if (!settings.apiUrl || !settings.apiKey) return;
   setSyncStatus('Syncing…');
   try {
     const data = await apiRequest('GET', '/workouts');
-    paces = data.workouts || data;
+    const remotePaces = (data.workouts || data)
+      .filter(p => !pendingDeletes.has(p.id))  // don't restore pending deletes
+      .map(migratePace);                         // migrate old format
+    paces = remotePaces;
     saveLocalPaces();
     setSyncStatus('Synced', 'ok');
     renderPaceList();
@@ -426,10 +467,16 @@ async function persistPace(pace) {
 }
 
 async function deletePace(id) {
+  pendingDeletes.add(id);
   paces = paces.filter(p => p.id !== id);
   saveLocalPaces();
   renderPaceList();
-  try { await apiRequest('DELETE', `/workouts/${id}`); } catch(e){}
+  try {
+    await apiRequest('DELETE', `/workouts/${id}`);
+    pendingDeletes.delete(id); // confirmed deleted on server
+  } catch(e) {
+    // Keep in pendingDeletes so sync doesn't restore it this session
+  }
 }
 
 function setSyncStatus(msg, cls = '') {
@@ -1125,8 +1172,10 @@ document.getElementById('btn-builder-back').addEventListener('click', () => {
 document.getElementById('btn-delete-pace').addEventListener('click', async () => {
   if (!editingPace) return;
   if (confirm(`Delete "${editingPace.name || 'this pace'}"?`)) {
-    await deletePace(editingPace.id);
+    const id = editingPace.id;
+    editingPace = null;
     showScreen('home');
+    await deletePace(id);
   }
 });
 
