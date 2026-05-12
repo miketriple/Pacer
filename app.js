@@ -304,19 +304,27 @@ function showTemplatePicker() {
     const catEl = document.createElement('div');
     catEl.className = 'template-category';
 
-    // Collapsible category header
+    // Category header — starts EXPANDED
     const catHeader = document.createElement('button');
     catHeader.className = 'template-cat-header';
     catHeader.innerHTML = `<span class="template-cat-title">${escHtml(cat.category)}</span><span class="template-cat-chevron">▼</span>`;
     catEl.appendChild(catHeader);
 
     const catBody = document.createElement('div');
-    catBody.className = 'template-cat-body';
+    catBody.className = 'template-cat-body'; // no 'collapsed' — starts open
 
     (cat.subcategories || []).forEach(sub => {
       const subEl = document.createElement('div');
       subEl.className = 'template-subcategory';
-      subEl.innerHTML = `<div class="template-sub-title">${escHtml(sub.name)}</div>`;
+
+      // Subcategory header — starts COLLAPSED
+      const subHeader = document.createElement('button');
+      subHeader.className = 'template-sub-header';
+      subHeader.innerHTML = `<span class="template-sub-title">${escHtml(sub.name)}</span><span class="template-sub-chevron">▶</span>`;
+      subEl.appendChild(subHeader);
+
+      const subBody = document.createElement('div');
+      subBody.className = 'template-sub-body collapsed'; // starts collapsed
       const cards = document.createElement('div');
       cards.className = 'template-cards';
 
@@ -335,7 +343,14 @@ function showTemplatePicker() {
         cards.appendChild(btn);
       });
 
-      subEl.appendChild(cards);
+      subBody.appendChild(cards);
+      subEl.appendChild(subBody);
+
+      subHeader.addEventListener('click', () => {
+        const collapsed = subBody.classList.toggle('collapsed');
+        subHeader.querySelector('.template-sub-chevron').textContent = collapsed ? '▶' : '▼';
+      });
+
       catBody.appendChild(subEl);
     });
 
