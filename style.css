@@ -145,6 +145,18 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
    TEMPLATE PICKER
    ============================================================ */
 
+.template-category { margin-bottom: 8px; }
+
+.template-cat-header { display:flex; align-items:center; justify-content:space-between; width:100%; padding:14px 4px 10px; background:none; text-align:left; }
+.template-cat-title { font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:15px; letter-spacing:.08em; text-transform:uppercase; color:var(--text); }
+.template-cat-chevron { font-size:11px; color:var(--text-muted); transition:transform var(--transition); }
+
+.template-cat-body { padding-bottom:8px; }
+.template-cat-body.collapsed { display:none; }
+
+.template-subcategory { margin-bottom:14px; }
+.template-sub-title { font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:11px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-muted); padding:4px 2px 8px; }
+
 .template-blank-btn { display:flex; align-items:center; gap:14px; width:100%; background:var(--surface); border:1.5px dashed var(--border); border-radius:14px; padding:16px; margin-bottom:20px; text-align:left; transition:border-color var(--transition),background var(--transition); }
 .template-blank-btn:hover,.template-blank-btn:active { border-color:var(--accent); background:var(--accent-dim); }
 .template-blank-icon { font-size:24px; color:var(--accent); font-weight:300; width:36px; text-align:center; flex-shrink:0; }

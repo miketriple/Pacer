@@ -1,0 +1,599 @@
+[
+  {
+    "category": "Fitness & Training",
+    "subcategories": [
+      {
+        "name": "Running",
+        "templates": [
+          {
+            "id": "tpl-c25k-w1",
+            "name": "C25K — Week 1",
+            "description": "Jog 60s / Walk 90s × 8",
+            "items": [
+              { "type": "step", "name": "Warm Up Walk", "duration": 300, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Start your warm up walk." }] },
+              { "type": "group", "name": "Interval", "repeats": 8, "steps": [
+                { "type": "step", "name": "Jog", "duration": 60, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Begin jogging." }] },
+                { "type": "step", "name": "Walk", "duration": 90, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Walk it out." }] }
+              ]},
+              { "type": "step", "name": "Cool Down Walk", "duration": 300, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down. Great work." }] }
+            ]
+          },
+          {
+            "id": "tpl-c25k-w2",
+            "name": "C25K — Week 2",
+            "description": "Jog 90s / Walk 2min × 6",
+            "items": [
+              { "type": "step", "name": "Warm Up Walk", "duration": 300, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Start your warm up walk." }] },
+              { "type": "group", "name": "Interval", "repeats": 6, "steps": [
+                { "type": "step", "name": "Jog", "duration": 90, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Begin jogging." }] },
+                { "type": "step", "name": "Walk", "duration": 120, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Walk it out." }] }
+              ]},
+              { "type": "step", "name": "Cool Down Walk", "duration": 300, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down. Great work." }] }
+            ]
+          },
+          {
+            "id": "tpl-c25k-w3",
+            "name": "C25K — Week 3",
+            "description": "90s / 90s / 3min / 3min × 2",
+            "items": [
+              { "type": "step", "name": "Warm Up Walk", "duration": 300, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Start your warm up walk." }] },
+              { "type": "group", "name": "Interval", "repeats": 2, "steps": [
+                { "type": "step", "name": "Jog", "duration": 90, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Begin jogging." }] },
+                { "type": "step", "name": "Walk", "duration": 90, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Walk it out." }] },
+                { "type": "step", "name": "Jog", "duration": 180, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Keep going." }] },
+                { "type": "step", "name": "Walk", "duration": 180, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Walk it out." }] }
+              ]},
+              { "type": "step", "name": "Cool Down Walk", "duration": 300, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down. Great work." }] }
+            ]
+          },
+          {
+            "id": "tpl-c25k-w4",
+            "name": "C25K — Week 4",
+            "description": "3min / 90s / 5min / 2.5min × 2",
+            "items": [
+              { "type": "step", "name": "Warm Up Walk", "duration": 300, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Start your warm up walk." }] },
+              { "type": "group", "name": "Interval", "repeats": 2, "steps": [
+                { "type": "step", "name": "Jog", "duration": 180, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Begin jogging." }] },
+                { "type": "step", "name": "Walk", "duration": 90, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Walk it out." }] },
+                { "type": "step", "name": "Jog", "duration": 300, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Keep going." }] },
+                { "type": "step", "name": "Walk", "duration": 150, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Walk it out." }] }
+              ]},
+              { "type": "step", "name": "Cool Down Walk", "duration": 300, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down. Great work." }] }
+            ]
+          },
+          {
+            "id": "tpl-c25k-w5r1",
+            "name": "C25K — Week 5, Run 1",
+            "description": "5min jog × 3 with 3min walks",
+            "items": [
+              { "type": "step", "name": "Warm Up Walk", "duration": 300, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Start your warm up walk." }] },
+              { "type": "group", "name": "Interval", "repeats": 3, "steps": [
+                { "type": "step", "name": "Jog", "duration": 300, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Begin jogging." }] },
+                { "type": "step", "name": "Walk", "duration": 180, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Walk it out." }] }
+              ]},
+              { "type": "step", "name": "Cool Down Walk", "duration": 300, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down. Great work." }] }
+            ]
+          },
+          {
+            "id": "tpl-c25k-w5r2",
+            "name": "C25K — Week 5, Run 2",
+            "description": "8min jog / 5min walk / 8min jog",
+            "items": [
+              { "type": "step", "name": "Warm Up Walk", "duration": 300, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Start your warm up walk." }] },
+              { "type": "step", "name": "Jog", "duration": 480, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Begin jogging." }] },
+              { "type": "step", "name": "Walk", "duration": 300, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Walk it out." }] },
+              { "type": "step", "name": "Jog", "duration": 480, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Final stretch." }] },
+              { "type": "step", "name": "Cool Down Walk", "duration": 300, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down. Great work." }] }
+            ]
+          },
+          {
+            "id": "tpl-c25k-w5r3",
+            "name": "C25K — Week 5, Run 3",
+            "description": "20 minutes continuous",
+            "items": [
+              { "type": "step", "name": "Warm Up Walk", "duration": 300, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Start your warm up walk." }] },
+              { "type": "step", "name": "Run", "duration": 1200, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Begin running. You have got this." }, { "offsetSeconds": 600, "text": "Halfway there. Keep going." }] },
+              { "type": "step", "name": "Cool Down Walk", "duration": 300, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down. Excellent work." }] }
+            ]
+          },
+          {
+            "id": "tpl-c25k-w6r1",
+            "name": "C25K — Week 6, Run 1",
+            "description": "5min / 3min / 8min / 3min / 5min",
+            "items": [
+              { "type": "step", "name": "Warm Up Walk", "duration": 300, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Start your warm up walk." }] },
+              { "type": "step", "name": "Jog", "duration": 300, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Begin jogging." }] },
+              { "type": "step", "name": "Walk", "duration": 180, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Walk it out." }] },
+              { "type": "step", "name": "Jog", "duration": 480, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Keep going." }] },
+              { "type": "step", "name": "Walk", "duration": 180, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Walk it out." }] },
+              { "type": "step", "name": "Jog", "duration": 300, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Final stretch." }] },
+              { "type": "step", "name": "Cool Down Walk", "duration": 300, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down. Great work." }] }
+            ]
+          },
+          {
+            "id": "tpl-c25k-w6r2",
+            "name": "C25K — Week 6, Run 2",
+            "description": "10min jog / 3min walk / 10min jog",
+            "items": [
+              { "type": "step", "name": "Warm Up Walk", "duration": 300, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Start your warm up walk." }] },
+              { "type": "step", "name": "Jog", "duration": 600, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Begin jogging." }] },
+              { "type": "step", "name": "Walk", "duration": 180, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Walk it out." }] },
+              { "type": "step", "name": "Jog", "duration": 600, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Final stretch." }] },
+              { "type": "step", "name": "Cool Down Walk", "duration": 300, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down. Great work." }] }
+            ]
+          },
+          {
+            "id": "tpl-c25k-w6r3",
+            "name": "C25K — Week 6, Run 3",
+            "description": "22 minutes continuous",
+            "items": [
+              { "type": "step", "name": "Warm Up Walk", "duration": 300, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Start your warm up walk." }] },
+              { "type": "step", "name": "Run", "duration": 1320, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Begin running." }, { "offsetSeconds": 660, "text": "Halfway. Keep your pace." }] },
+              { "type": "step", "name": "Cool Down Walk", "duration": 300, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down." }] }
+            ]
+          },
+          {
+            "id": "tpl-c25k-w7",
+            "name": "C25K — Week 7",
+            "description": "25 minutes continuous",
+            "items": [
+              { "type": "step", "name": "Warm Up Walk", "duration": 300, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Start your warm up walk." }] },
+              { "type": "step", "name": "Run", "duration": 1500, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Begin running." }, { "offsetSeconds": 750, "text": "Halfway. You are doing great." }] },
+              { "type": "step", "name": "Cool Down Walk", "duration": 300, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down." }] }
+            ]
+          },
+          {
+            "id": "tpl-c25k-w8",
+            "name": "C25K — Week 8",
+            "description": "28 minutes continuous",
+            "items": [
+              { "type": "step", "name": "Warm Up Walk", "duration": 300, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Start your warm up walk." }] },
+              { "type": "step", "name": "Run", "duration": 1680, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Begin running." }, { "offsetSeconds": 840, "text": "Halfway. Strong pace." }] },
+              { "type": "step", "name": "Cool Down Walk", "duration": 300, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down." }] }
+            ]
+          },
+          {
+            "id": "tpl-c25k-w9",
+            "name": "C25K — Week 9",
+            "description": "30 minutes — you made it!",
+            "items": [
+              { "type": "step", "name": "Warm Up Walk", "duration": 300, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Final week. Start your warm up walk." }] },
+              { "type": "step", "name": "Run", "duration": 1800, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Begin running. This is it." }, { "offsetSeconds": 900, "text": "Halfway. You have come so far." }] },
+              { "type": "step", "name": "Cool Down Walk", "duration": 300, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down. You did it!" }] }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Boxing & Martial Arts",
+        "templates": [
+          {
+            "id": "tpl-boxing",
+            "name": "Boxing",
+            "description": "3 min rounds · 1 min rest · 12 rounds",
+            "items": [
+              { "type": "step", "name": "Warm Up", "duration": 300, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Warm up. Shadow box to get loose." }] },
+              { "type": "group", "name": "Round", "repeats": 12, "steps": [
+                { "type": "step", "name": "Round", "duration": 180, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Begin!" }] },
+                { "type": "step", "name": "Rest", "duration": 60, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Rest." }] }
+              ]},
+              { "type": "step", "name": "Cool Down", "duration": 60, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down." }] }
+            ]
+          },
+          {
+            "id": "tpl-boxing-6",
+            "name": "Boxing — Beginner",
+            "description": "2 min rounds · 1 min rest · 6 rounds",
+            "items": [
+              { "type": "step", "name": "Warm Up", "duration": 180, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Warm up." }] },
+              { "type": "group", "name": "Round", "repeats": 6, "steps": [
+                { "type": "step", "name": "Round", "duration": 120, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Begin!" }] },
+                { "type": "step", "name": "Rest", "duration": 60, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Rest." }] }
+              ]},
+              { "type": "step", "name": "Cool Down", "duration": 60, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down." }] }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "HIIT & Intervals",
+        "templates": [
+          {
+            "id": "tpl-hiit",
+            "name": "HIIT",
+            "description": "40s work · 20s rest · 8 rounds",
+            "items": [
+              { "type": "step", "name": "Warm Up", "duration": 180, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Get ready to work." }] },
+              { "type": "group", "name": "Round", "repeats": 8, "steps": [
+                { "type": "step", "name": "Work", "duration": 40, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Go!" }] },
+                { "type": "step", "name": "Rest", "duration": 20, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Rest." }] }
+              ]},
+              { "type": "step", "name": "Cool Down", "duration": 60, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down." }] }
+            ]
+          },
+          {
+            "id": "tpl-tabata",
+            "name": "Tabata",
+            "description": "20s work · 10s rest · 8 rounds",
+            "items": [
+              { "type": "step", "name": "Warm Up", "duration": 120, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Warm up. Tabata starts soon." }] },
+              { "type": "group", "name": "Round", "repeats": 8, "steps": [
+                { "type": "step", "name": "Work", "duration": 20, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Go!" }] },
+                { "type": "step", "name": "Rest", "duration": 10, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Rest." }] }
+              ]},
+              { "type": "step", "name": "Cool Down", "duration": 60, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Cool down." }] }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Jump Rope",
+        "templates": [
+          {
+            "id": "tpl-jumprope",
+            "name": "Jump Rope",
+            "description": "2 min work · 30s rest · 10 rounds",
+            "items": [
+              { "type": "step", "name": "Warm Up", "duration": 180, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Get your rope ready." }] },
+              { "type": "group", "name": "Round", "repeats": 10, "steps": [
+                { "type": "step", "name": "Jump", "duration": 120, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Jump!" }] },
+                { "type": "step", "name": "Rest", "duration": 30, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Rest." }] }
+              ]},
+              { "type": "step", "name": "Cool Down", "duration": 60, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Good work. Cool down." }] }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "Kitchen & Cooking",
+    "subcategories": [
+      {
+        "name": "Tea",
+        "templates": [
+          {
+            "id": "tpl-green-tea",
+            "name": "Green Tea",
+            "description": "Delicate steep · 2 minutes",
+            "items": [
+              { "type": "step", "name": "Heat Water", "duration": 120, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Heat water to around 80 degrees. Do not boil." }] },
+              { "type": "step", "name": "Steep", "duration": 120, "color": "green", "voiceCues": [{ "offsetSeconds": 0, "text": "Add leaves or bag. Steeping now." }, { "offsetSeconds": 90, "text": "30 seconds remaining." }] },
+              { "type": "step", "name": "Remove & Enjoy", "duration": 30, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Remove leaves. Your tea is ready." }] }
+            ]
+          },
+          {
+            "id": "tpl-black-tea",
+            "name": "Black Tea",
+            "description": "Full steep · 4 minutes",
+            "items": [
+              { "type": "step", "name": "Boil Water", "duration": 180, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Bring water to a full boil." }] },
+              { "type": "step", "name": "Steep", "duration": 240, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Add tea. Steeping now." }, { "offsetSeconds": 180, "text": "One minute remaining." }] },
+              { "type": "step", "name": "Remove & Enjoy", "duration": 30, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Remove tea. Add milk or sugar if you like." }] }
+            ]
+          },
+          {
+            "id": "tpl-herbal-tea",
+            "name": "Herbal Tea",
+            "description": "Long steep · 7 minutes",
+            "items": [
+              { "type": "step", "name": "Boil Water", "duration": 180, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Bring water to a full boil." }] },
+              { "type": "step", "name": "Steep", "duration": 420, "color": "purple", "voiceCues": [{ "offsetSeconds": 0, "text": "Add herbs or bag. Steeping now." }, { "offsetSeconds": 360, "text": "One minute remaining." }] },
+              { "type": "step", "name": "Remove & Enjoy", "duration": 30, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Remove herbs. Your tea is ready." }] }
+            ]
+          },
+          {
+            "id": "tpl-white-tea",
+            "name": "White Tea",
+            "description": "Gentle steep · 3 minutes",
+            "items": [
+              { "type": "step", "name": "Heat Water", "duration": 120, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Heat water to around 75 degrees. Do not boil." }] },
+              { "type": "step", "name": "Steep", "duration": 180, "color": "white", "voiceCues": [{ "offsetSeconds": 0, "text": "Add white tea. Steeping now." }, { "offsetSeconds": 150, "text": "30 seconds remaining." }] },
+              { "type": "step", "name": "Remove & Enjoy", "duration": 30, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Remove tea. Enjoy." }] }
+            ]
+          },
+          {
+            "id": "tpl-oolong-tea",
+            "name": "Oolong Tea",
+            "description": "Medium steep · 3 minutes",
+            "items": [
+              { "type": "step", "name": "Heat Water", "duration": 150, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Heat water to around 85 degrees." }] },
+              { "type": "step", "name": "Steep", "duration": 180, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Add oolong. Steeping now." }, { "offsetSeconds": 150, "text": "30 seconds remaining." }] },
+              { "type": "step", "name": "Remove & Enjoy", "duration": 30, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Remove tea. Enjoy." }] }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Coffee",
+        "templates": [
+          {
+            "id": "tpl-frenchpress",
+            "name": "French Press",
+            "description": "Bloom · brew · press",
+            "items": [
+              { "type": "step", "name": "Bloom", "duration": 30, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Add a little hot water. Let the coffee bloom." }] },
+              { "type": "step", "name": "Brew", "duration": 210, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Fill the press. Brewing now." }, { "offsetSeconds": 180, "text": "30 seconds. Get ready to press." }] },
+              { "type": "step", "name": "Press & Pour", "duration": 30, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Press slowly and pour immediately." }] }
+            ]
+          },
+          {
+            "id": "tpl-pour-over",
+            "name": "Pour Over",
+            "description": "Bloom · pour in stages · enjoy",
+            "items": [
+              { "type": "step", "name": "Bloom", "duration": 45, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Pour just enough water to wet the grounds. Let it bloom." }] },
+              { "type": "step", "name": "First Pour", "duration": 45, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "First pour. Slow circular motion." }] },
+              { "type": "step", "name": "Second Pour", "duration": 45, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Second pour." }] },
+              { "type": "step", "name": "Final Pour", "duration": 60, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Final pour. Let it drain fully." }] },
+              { "type": "step", "name": "Enjoy", "duration": 30, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Your coffee is ready." }] }
+            ]
+          },
+          {
+            "id": "tpl-aeropress",
+            "name": "AeroPress",
+            "description": "Steep · press",
+            "items": [
+              { "type": "step", "name": "Add & Stir", "duration": 15, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Add coffee and water. Stir." }] },
+              { "type": "step", "name": "Steep", "duration": 60, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Steeping." }, { "offsetSeconds": 30, "text": "Halfway." }] },
+              { "type": "step", "name": "Press", "duration": 30, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Press slowly and steadily." }] }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Eggs",
+        "templates": [
+          {
+            "id": "tpl-soft-boiled-egg",
+            "name": "Soft Boiled Egg",
+            "description": "Runny yolk · 6 minutes",
+            "items": [
+              { "type": "step", "name": "Boil Water", "duration": 300, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Bring water to a rolling boil." }] },
+              { "type": "step", "name": "Cook", "duration": 360, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Add eggs carefully. Timer started." }, { "offsetSeconds": 300, "text": "One minute remaining." }] },
+              { "type": "step", "name": "Ice Bath", "duration": 300, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Transfer to ice bath immediately." }] }
+            ]
+          },
+          {
+            "id": "tpl-medium-boiled-egg",
+            "name": "Medium Boiled Egg",
+            "description": "Jammy yolk · 8 minutes",
+            "items": [
+              { "type": "step", "name": "Boil Water", "duration": 300, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Bring water to a rolling boil." }] },
+              { "type": "step", "name": "Cook", "duration": 480, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Add eggs carefully. Timer started." }, { "offsetSeconds": 420, "text": "One minute remaining." }] },
+              { "type": "step", "name": "Ice Bath", "duration": 300, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Transfer to ice bath immediately." }] }
+            ]
+          },
+          {
+            "id": "tpl-hard-boiled-egg",
+            "name": "Hard Boiled Egg",
+            "description": "Firm yolk · 12 minutes",
+            "items": [
+              { "type": "step", "name": "Boil Water", "duration": 300, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Bring water to a rolling boil." }] },
+              { "type": "step", "name": "Cook", "duration": 720, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Add eggs. Timer started." }, { "offsetSeconds": 660, "text": "One minute remaining." }] },
+              { "type": "step", "name": "Ice Bath", "duration": 300, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Transfer to ice bath." }] }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Pan Cooking",
+        "templates": [
+          {
+            "id": "tpl-pan-sear",
+            "name": "Pan Sear & Flip",
+            "description": "Sear · flip · rest",
+            "items": [
+              { "type": "step", "name": "Heat Pan", "duration": 120, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Heat pan over medium high heat." }] },
+              { "type": "step", "name": "First Side", "duration": 240, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Add oil and food. Do not move it." }, { "offsetSeconds": 210, "text": "30 seconds. Get ready to flip." }] },
+              { "type": "step", "name": "Second Side", "duration": 240, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Flip. Second side now." }, { "offsetSeconds": 210, "text": "30 seconds remaining." }] },
+              { "type": "step", "name": "Rest", "duration": 180, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Remove from heat. Let it rest before cutting." }] }
+            ]
+          },
+          {
+            "id": "tpl-pasta",
+            "name": "Pasta",
+            "description": "Boil · cook · drain",
+            "items": [
+              { "type": "step", "name": "Boil Water", "duration": 600, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Bring a large pot of water to a boil." }] },
+              { "type": "step", "name": "Salt & Add Pasta", "duration": 30, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Salt the water generously and add pasta." }] },
+              { "type": "step", "name": "Cook", "duration": 540, "color": "red", "voiceCues": [{ "offsetSeconds": 0, "text": "Cooking. Stir occasionally." }, { "offsetSeconds": 480, "text": "One minute remaining. Taste for doneness." }] },
+              { "type": "step", "name": "Drain & Sauce", "duration": 60, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Drain pasta. Add to your sauce immediately." }] }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "Focus & Work",
+    "subcategories": [
+      {
+        "name": "Study Sessions",
+        "templates": [
+          {
+            "id": "tpl-pomodoro",
+            "name": "Pomodoro",
+            "description": "25min focus · 5min break × 4",
+            "items": [
+              { "type": "group", "name": "Pomodoro", "repeats": 4, "steps": [
+                { "type": "step", "name": "Focus", "duration": 1500, "color": "purple", "voiceCues": [{ "offsetSeconds": 0, "text": "Focus time. Begin." }, { "offsetSeconds": 750, "text": "Halfway. Stay focused." }] },
+                { "type": "step", "name": "Break", "duration": 300, "color": "green", "voiceCues": [{ "offsetSeconds": 0, "text": "Take a short break. Step away." }] }
+              ]},
+              { "type": "step", "name": "Long Break", "duration": 900, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Four pomodoros complete. Take a longer break. Well done." }] }
+            ]
+          },
+          {
+            "id": "tpl-study-sprint",
+            "name": "Study Sprint",
+            "description": "45min study · 15min break × 3",
+            "items": [
+              { "type": "group", "name": "Sprint", "repeats": 3, "steps": [
+                { "type": "step", "name": "Study", "duration": 2700, "color": "purple", "voiceCues": [{ "offsetSeconds": 0, "text": "Study session. Begin." }, { "offsetSeconds": 1350, "text": "Halfway through this sprint." }] },
+                { "type": "step", "name": "Break", "duration": 900, "color": "green", "voiceCues": [{ "offsetSeconds": 0, "text": "Break time. Rest your mind." }] }
+              ]}
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Deep Work",
+        "templates": [
+          {
+            "id": "tpl-deepwork",
+            "name": "Deep Work Session",
+            "description": "90min focus · 20min rest",
+            "items": [
+              { "type": "step", "name": "Settle In", "duration": 120, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Clear your space. Get settled." }] },
+              { "type": "step", "name": "Deep Work", "duration": 5400, "color": "purple", "voiceCues": [{ "offsetSeconds": 0, "text": "Deep work. Begin." }, { "offsetSeconds": 2700, "text": "Halfway. Stay in the flow." }] },
+              { "type": "step", "name": "Rest", "duration": 1200, "color": "green", "voiceCues": [{ "offsetSeconds": 0, "text": "Session complete. Step away and rest fully." }] }
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "Mindfulness & Wellness",
+    "subcategories": [
+      {
+        "name": "Breathing",
+        "templates": [
+          {
+            "id": "tpl-boxbreathing",
+            "name": "Box Breathing",
+            "description": "Inhale · hold · exhale · hold × 8",
+            "items": [
+              { "type": "group", "name": "Cycle", "repeats": 8, "steps": [
+                { "type": "step", "name": "Inhale", "duration": 4, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Inhale slowly." }] },
+                { "type": "step", "name": "Hold", "duration": 4, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Hold." }] },
+                { "type": "step", "name": "Exhale", "duration": 4, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Exhale slowly." }] },
+                { "type": "step", "name": "Hold", "duration": 4, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Hold." }] }
+              ]}
+            ]
+          },
+          {
+            "id": "tpl-478-breathing",
+            "name": "4-7-8 Breathing",
+            "description": "Calming breath pattern × 6",
+            "items": [
+              { "type": "group", "name": "Cycle", "repeats": 6, "steps": [
+                { "type": "step", "name": "Inhale", "duration": 4, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Inhale through your nose." }] },
+                { "type": "step", "name": "Hold", "duration": 7, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Hold." }] },
+                { "type": "step", "name": "Exhale", "duration": 8, "color": "green", "voiceCues": [{ "offsetSeconds": 0, "text": "Exhale completely through your mouth." }] }
+              ]}
+            ]
+          },
+          {
+            "id": "tpl-wim-hof",
+            "name": "Wim Hof Breathing",
+            "description": "30 deep breaths · hold · recovery × 3",
+            "items": [
+              { "type": "group", "name": "Round", "repeats": 3, "steps": [
+                { "type": "step", "name": "Deep Breathing", "duration": 120, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "30 deep breaths. Breathe fully in and let go." }] },
+                { "type": "step", "name": "Retention Hold", "duration": 90, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Exhale and hold. Relax completely." }] },
+                { "type": "step", "name": "Recovery Breath", "duration": 15, "color": "green", "voiceCues": [{ "offsetSeconds": 0, "text": "Inhale fully and hold for 15 seconds." }] }
+              ]}
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Meditation",
+        "templates": [
+          {
+            "id": "tpl-meditation-short",
+            "name": "Quick Meditation",
+            "description": "5 minutes to reset",
+            "items": [
+              { "type": "step", "name": "Settle In", "duration": 30, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Find a comfortable position and close your eyes." }] },
+              { "type": "step", "name": "Meditate", "duration": 270, "color": "purple", "voiceCues": [{ "offsetSeconds": 0, "text": "Focus on your breath. Let thoughts pass." }] },
+              { "type": "step", "name": "Return", "duration": 30, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Gently bring your awareness back." }] }
+            ]
+          },
+          {
+            "id": "tpl-meditation",
+            "name": "Guided Meditation",
+            "description": "5min settle · 20min sit · 5min ease out",
+            "items": [
+              { "type": "step", "name": "Settle In", "duration": 300, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Find your position and settle in." }] },
+              { "type": "step", "name": "Sit", "duration": 1200, "color": "purple", "voiceCues": [{ "offsetSeconds": 0, "text": "Begin your meditation." }, { "offsetSeconds": 600, "text": "Halfway. Return to your breath if the mind has wandered." }] },
+              { "type": "step", "name": "Ease Out", "duration": 300, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Gently begin to return." }] }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Stretching & Recovery",
+        "templates": [
+          {
+            "id": "tpl-morning-stretch",
+            "name": "Morning Stretch",
+            "description": "Full body wake-up · 10 minutes",
+            "items": [
+              { "type": "step", "name": "Neck Rolls", "duration": 60, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Gentle neck rolls. Both directions." }] },
+              { "type": "step", "name": "Shoulder Stretch", "duration": 60, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Shoulder stretch. Each arm across the chest." }] },
+              { "type": "step", "name": "Chest Opener", "duration": 60, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Chest opener. Hands behind your back." }] },
+              { "type": "step", "name": "Hip Circles", "duration": 60, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Hip circles. Both directions." }] },
+              { "type": "step", "name": "Forward Fold", "duration": 60, "color": "green", "voiceCues": [{ "offsetSeconds": 0, "text": "Forward fold. Hang heavy." }] },
+              { "type": "step", "name": "Hip Flexor", "duration": 60, "color": "green", "voiceCues": [{ "offsetSeconds": 0, "text": "Hip flexor stretch. Each side 30 seconds." }] },
+              { "type": "step", "name": "Seated Twist", "duration": 60, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Seated spinal twist. Each side." }] },
+              { "type": "step", "name": "Child's Pose", "duration": 60, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Child's pose. Breathe deeply." }] },
+              { "type": "step", "name": "Savasana", "duration": 120, "color": "purple", "voiceCues": [{ "offsetSeconds": 0, "text": "Lie flat. Notice how your body feels." }] }
+            ]
+          },
+          {
+            "id": "tpl-ice-heat",
+            "name": "Ice & Heat Therapy",
+            "description": "Ice 20min · off 20min × 3",
+            "items": [
+              { "type": "group", "name": "Cycle", "repeats": 3, "steps": [
+                { "type": "step", "name": "Ice", "duration": 1200, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Apply ice pack. 20 minutes." }, { "offsetSeconds": 1140, "text": "One minute remaining on ice." }] },
+                { "type": "step", "name": "Rest", "duration": 1200, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Remove ice. Rest for 20 minutes." }] }
+              ]}
+            ]
+          }
+        ]
+      }
+    ]
+  },
+  {
+    "category": "Daily Routines",
+    "subcategories": [
+      {
+        "name": "Morning",
+        "templates": [
+          {
+            "id": "tpl-morning-routine",
+            "name": "Morning Routine",
+            "description": "A calm, structured start to the day",
+            "items": [
+              { "type": "step", "name": "Wake Up Water", "duration": 120, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Drink a full glass of water. Good morning." }] },
+              { "type": "step", "name": "Stretch", "duration": 300, "color": "yellow", "voiceCues": [{ "offsetSeconds": 0, "text": "Light stretching. Wake your body up." }] },
+              { "type": "step", "name": "Shower", "duration": 480, "color": "teal", "voiceCues": [{ "offsetSeconds": 0, "text": "Shower time." }, { "offsetSeconds": 420, "text": "One minute remaining." }] },
+              { "type": "step", "name": "Get Ready", "duration": 900, "color": "orange", "voiceCues": [{ "offsetSeconds": 0, "text": "Get dressed and ready." }] },
+              { "type": "step", "name": "Breakfast", "duration": 600, "color": "green", "voiceCues": [{ "offsetSeconds": 0, "text": "Sit down and eat breakfast." }] }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Evening",
+        "templates": [
+          {
+            "id": "tpl-evening-routine",
+            "name": "Evening Wind Down",
+            "description": "Screen off · journal · read · sleep",
+            "items": [
+              { "type": "step", "name": "Screens Off", "duration": 60, "color": "grey", "voiceCues": [{ "offsetSeconds": 0, "text": "Put your devices away. Wind down begins." }] },
+              { "type": "step", "name": "Skincare", "duration": 300, "color": "pink", "voiceCues": [{ "offsetSeconds": 0, "text": "Skincare routine." }] },
+              { "type": "step", "name": "Journal", "duration": 600, "color": "purple", "voiceCues": [{ "offsetSeconds": 0, "text": "Open your journal. Write freely." }] },
+              { "type": "step", "name": "Read", "duration": 1200, "color": "blue", "voiceCues": [{ "offsetSeconds": 0, "text": "Reading time." }, { "offsetSeconds": 1140, "text": "One minute. Find a good stopping point." }] },
+              { "type": "step", "name": "Lights Out", "duration": 30, "color": "grey", "voiceCues": [{ "offsetSeconds": 0, "text": "Time to sleep. Good night." }] }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+]
