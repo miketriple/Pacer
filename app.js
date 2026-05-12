@@ -304,14 +304,14 @@ function showTemplatePicker() {
     const catEl = document.createElement('div');
     catEl.className = 'template-category';
 
-    // Category header — starts EXPANDED
+    // Category header — starts COLLAPSED
     const catHeader = document.createElement('button');
     catHeader.className = 'template-cat-header';
-    catHeader.innerHTML = `<span class="template-cat-title">${escHtml(cat.category)}</span><span class="template-cat-chevron">▼</span>`;
+    catHeader.innerHTML = `<span class="template-cat-title">${escHtml(cat.category)}</span><span class="template-cat-chevron">▶</span>`;
     catEl.appendChild(catHeader);
 
     const catBody = document.createElement('div');
-    catBody.className = 'template-cat-body'; // no 'collapsed' — starts open
+    catBody.className = 'template-cat-body collapsed'; // starts collapsed
 
     (cat.subcategories || []).forEach(sub => {
       const subEl = document.createElement('div');
