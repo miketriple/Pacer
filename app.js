@@ -667,7 +667,10 @@ function syncBuilderState() {
     const secEl   = card.querySelector('[data-part="sec"]');
     const voiceEl = card.querySelector('.step-voice-input');
     if (nameEl) step.name = nameEl.value;
-    if (minEl && secEl) step.duration = (parseInt(minEl.value)||0)*60 + Math.min(59,parseInt(secEl.value)||0);
+    if (minEl && secEl) {
+      const onTap = card.querySelector('.step-end-btn[data-end="ontap"]')?.classList.contains('active');
+      step.duration = onTap ? 0 : (parseInt(minEl.value)||0)*60 + Math.min(59,parseInt(secEl.value)||0);
+    }
     if (voiceEl && step.voiceCues?.[0]) step.voiceCues[0].text = voiceEl.value;
   });
 
