@@ -429,6 +429,7 @@ function buildStepCard(step, itemIdx, groupIdx) {
   card.className = inGroup ? 'step-card group-step' : 'step-card';
   card.dataset.id = step.id;
 
+  const isManual = step.duration === 0;
   const mins = Math.floor((step.duration || 0) / 60);
   const secs = (step.duration || 0) % 60;
   const startCue = step.voiceCues?.[0] ?? null;
@@ -451,7 +452,14 @@ function buildStepCard(step, itemIdx, groupIdx) {
     <div class="step-card-main">
       <span class="step-color-dot" style="background:${colorHex(step.color)}" title="Change color"></span>
       <input type="text" class="step-name-input" value="${escHtml(step.name)}" placeholder="Step name…" maxlength="40">
-      <div class="step-duration-wrap">
+    </div>
+    <div class="step-end-row">
+      <span class="step-end-label">End Step:</span>
+      <div class="step-end-toggle">
+        <button class="step-end-btn ${isManual ? '' : 'active'}" data-end="duration">Duration</button>
+        <button class="step-end-btn ${isManual ? 'active' : ''}" data-end="ontap">On Tap</button>
+      </div>
+      <div class="step-duration-wrap ${isManual ? 'hidden' : ''}">
         <input type="number" class="step-time-input" data-part="min" value="${mins}" min="0" max="99" aria-label="Minutes">
         <span class="step-colon">:</span>
         <input type="number" class="step-time-input" data-part="sec" value="${String(secs).padStart(2,'0')}" min="0" max="59" aria-label="Seconds">
@@ -479,14 +487,35 @@ function buildStepCard(step, itemIdx, groupIdx) {
     </div>`;
 
   // Wire up events
-  const nameInput  = card.querySelector('.step-name-input');
-  const voiceInput = card.querySelector('.step-voice-input');
-  const voiceClear = card.querySelector('.step-voice-clear');
-  const voiceIcon  = card.querySelector('.step-voice-icon');
-  const colorDot   = card.querySelector('.step-color-dot');
+  const nameInput   = card.querySelector('.step-name-input');
+  const voiceInput  = card.querySelector('.step-voice-input');
+  const voiceClear  = card.querySelector('.step-voice-clear');
+  const voiceIcon   = card.querySelector('.step-voice-icon');
+  const colorDot    = card.querySelector('.step-color-dot');
   const colorPicker = card.querySelector('.color-picker');
+  const durationWrap = card.querySelector('.step-duration-wrap');
 
   nameInput.addEventListener('input', () => { step.name = nameInput.value; });
+
+  // End Step toggle
+  card.querySelectorAll('.step-end-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      card.querySelectorAll('.step-end-btn').forEach(b => b.classList.remove('active'));
+      btn.classList.add('active');
+      if (btn.dataset.end === 'ontap') {
+        step.duration = 0;
+        durationWrap.classList.add('hidden');
+      } else {
+        // Restore a sensible default if switching back to duration
+        if (!step.duration) step.duration = 60;
+        const m = Math.floor(step.duration / 60);
+        const s = step.duration % 60;
+        card.querySelector('[data-part="min"]').value = m;
+        card.querySelector('[data-part="sec"]').value = String(s).padStart(2,'0');
+        durationWrap.classList.remove('hidden');
+      }
+    });
+  });
 
   card.querySelectorAll('.step-time-input').forEach(inp => {
     inp.addEventListener('change', () => {
@@ -701,7 +730,34 @@ function startSegment(idx) {
   animatePhaseTransition();
 
   clearInterval(timerInterval);
-  timerInterval = setInterval(tick, 1000);
+
+  if (seg.duration === 0) {
+    // Manual step — count up elapsed, fire voice cues, wait for user tap
+    timerInterval = setInterval(tickManual, 1000);
+  } else {
+    timerInterval = setInterval(tick, 1000);
+  }
+}
+
+// Elapsed counter for manual steps
+let manualElapsed = 0;
+
+function tickManual() {
+  if (isPaused) return;
+  manualElapsed++;
+  totalElapsedSeconds++;
+  checkVoiceCues(segmentIndex, manualElapsed);
+  // Update elapsed display
+  const clockEl = document.getElementById('timer-clock');
+  if (clockEl) clockEl.textContent = formatTime(manualElapsed);
+}
+
+function advanceManualStep() {
+  clearInterval(timerInterval);
+  manualElapsed = 0;
+  segmentIndex++;
+  if (segmentIndex >= flatSegments.length) completePace();
+  else startSegment(segmentIndex);
 }
 
 function tick() {
@@ -738,6 +794,7 @@ function restartPaceTimer() {
   clearInterval(timerInterval);
   isPaused = false;
   totalElapsedSeconds = 0;
+  manualElapsed = 0;
   document.getElementById('btn-pause-resume').textContent = 'Pause';
   document.getElementById('timer-clock').classList.remove('paused');
   startSegment(0);
@@ -761,6 +818,7 @@ function completePace() {
 function updateTimerDisplay() {
   const seg = flatSegments[segmentIndex];
   if (!seg) return;
+  const isManual = seg.duration === 0;
 
   let phaseLabel = '';
   if (seg._groupName && seg._totalRepeats > 1) {
@@ -770,11 +828,30 @@ function updateTimerDisplay() {
   }
   document.getElementById('timer-phase-label').textContent = phaseLabel;
   document.getElementById('timer-step-name').textContent = seg.name || '';
-  document.getElementById('timer-clock').textContent = formatTime(secondsLeft);
 
-  const elapsed = segmentDuration - secondsLeft;
-  document.getElementById('timer-progress-fill').style.width =
-    `${segmentDuration > 0 ? Math.min(100, (elapsed / segmentDuration) * 100) : 100}%`;
+  const clockEl    = document.getElementById('timer-clock');
+  const manualBtn  = document.getElementById('btn-manual-next');
+  const pauseBtn   = document.getElementById('btn-pause-resume');
+  const progressEl = document.getElementById('timer-progress-fill');
+
+  if (isManual) {
+    // Show elapsed counter, hide progress bar, show Done button, hide Pause
+    clockEl.textContent = formatTime(manualElapsed);
+    clockEl.classList.remove('paused');
+    clockEl.style.fontSize = 'clamp(28px, 8vw, 42px)';
+    if (manualBtn) manualBtn.style.display = 'flex';
+    if (pauseBtn)  pauseBtn.style.display  = 'none';
+    progressEl.style.width = '0%';
+  } else {
+    clockEl.style.fontSize = '';
+    if (manualBtn) manualBtn.style.display = 'none';
+    if (pauseBtn)  pauseBtn.style.display  = '';
+    clockEl.textContent = formatTime(secondsLeft);
+
+    const elapsed = segmentDuration - secondsLeft;
+    progressEl.style.width =
+      `${segmentDuration > 0 ? Math.min(100, (elapsed / segmentDuration) * 100) : 100}%`;
+  }
 
   document.querySelectorAll('.overall-dot').forEach((dot, i) => {
     dot.classList.remove('done','active');
@@ -784,7 +861,7 @@ function updateTimerDisplay() {
 
   const next = flatSegments[segmentIndex + 1];
   document.getElementById('timer-next').textContent = next
-    ? `Next: ${next.name} · ${formatTime(next.duration)}`
+    ? `Next: ${next.name}${next.duration > 0 ? ' · ' + formatTime(next.duration) : ' · On Tap'}`
     : 'Final step';
 }
 
@@ -960,6 +1037,7 @@ document.getElementById('btn-start-pace').addEventListener('click', () => {
 document.getElementById('btn-end-pace').addEventListener('click', () => {
   if (confirm('End this pace?')) { endPace(); showScreen('home'); }
 });
+document.getElementById('btn-manual-next').addEventListener('click', advanceManualStep);
 document.getElementById('btn-pause-resume').addEventListener('click', () => {
   if (isPaused) resumeTimer(); else pauseTimer();
 });

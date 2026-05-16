@@ -265,9 +265,37 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
 .group-step .step-card-main { padding:10px 10px 6px; }
 .group-step .step-card-actions { padding:0 8px 8px; }
 
-/* ============================================================
-   TIMER
-   ============================================================ */
+/* End Step toggle */
+.step-end-row { display:flex; align-items:center; gap:8px; padding:0 12px 10px; flex-wrap:wrap; }
+.step-end-label { font-size:12px; color:var(--text-muted); flex-shrink:0; }
+.step-end-toggle { display:flex; background:var(--surface2); border:1px solid var(--border); border-radius:8px; padding:2px; gap:2px; flex-shrink:0; }
+.step-end-btn { font-family:'Barlow Condensed',sans-serif; font-size:13px; font-weight:600; padding:4px 10px; border-radius:6px; color:var(--text-muted); transition:background var(--transition),color var(--transition); }
+.step-end-btn.active { background:var(--accent); color:var(--accent-text); }
+
+/* Manual next button on timer screen */
+.btn-manual-next {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--accent);
+  color: var(--accent-text);
+  font-family: 'Barlow Condensed', sans-serif;
+  font-weight: 700;
+  font-size: 22px;
+  letter-spacing: 0.06em;
+  padding: 20px 40px;
+  border-radius: 16px;
+  box-shadow: 0 4px 24px var(--accent-glow);
+  margin: 16px auto 0;
+  width: calc(100% - 48px);
+  max-width: 340px;
+  transition: all var(--transition);
+}
+.btn-manual-next:hover, .btn-manual-next:active {
+  filter: brightness(1.1);
+  transform: translateY(-2px);
+  box-shadow: 0 8px 32px var(--accent-glow);
+}
 
 .timer-header { border-bottom:1px solid var(--border); }
 .timer-body { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px 24px; text-align:center; }
