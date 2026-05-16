@@ -381,20 +381,29 @@ function openBuilderFromTemplate(tpl) {
 // 10. BUILDER
 // ============================================================
 
+function syncCountdownUI() {
+  const val = String(editingPace.transitionCountdown ?? '5');
+  document.querySelectorAll('#countdown-opts .countdown-opt').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.value === val);
+  });
+}
+
 function openBuilder(pace) {
   editingPace = JSON.parse(JSON.stringify(pace));
   editingPace.items = editingPace.items || [];
   document.getElementById('builder-pace-name').value = editingPace.name || '';
   document.getElementById('btn-delete-pace').style.visibility =
     (editingPace.isNew || !paces.find(p => p.id === editingPace.id)) ? 'hidden' : 'visible';
+  syncCountdownUI();
   renderBuilder();
   showScreen('builder');
 }
 
 function openBlankBuilder() {
-  editingPace = { id: genId(), name: '', items: [], isNew: true };
+  editingPace = { id: genId(), name: '', items: [], isNew: true, transitionCountdown: '5' };
   document.getElementById('builder-pace-name').value = '';
   document.getElementById('btn-delete-pace').style.visibility = 'hidden';
+  syncCountdownUI();
   renderBuilder();
   showScreen('builder');
 }
@@ -768,7 +777,8 @@ function tick() {
   secondsLeft--;
   totalElapsedSeconds++;
 
-  if (secondsLeft <= 5 && secondsLeft > 0 && segmentDuration > 10) speak(String(secondsLeft));
+  const tc = activePace.transitionCountdown ?? '5';
+  if (tc !== 'silent' && secondsLeft <= Number(tc) && secondsLeft > 0 && segmentDuration > Number(tc) * 2) speak(String(secondsLeft));
   checkVoiceCues(segmentIndex, segmentDuration - secondsLeft);
   updateTimerDisplay();
 
@@ -1015,6 +1025,14 @@ document.getElementById('btn-delete-pace').addEventListener('click', async () =>
     showScreen('home');
     await deletePace(id);
   }
+});
+
+document.querySelectorAll('#countdown-opts .countdown-opt').forEach(btn => {
+  btn.addEventListener('click', () => {
+    if (!editingPace) return;
+    editingPace.transitionCountdown = btn.dataset.value;
+    syncCountdownUI();
+  });
 });
 
 document.getElementById('btn-add-step-footer').addEventListener('click', () => {

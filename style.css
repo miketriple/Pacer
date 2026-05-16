@@ -185,6 +185,13 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
    BUILDER
    ============================================================ */
 
+.pace-settings-bar { display:flex; align-items:center; justify-content:space-between; padding:10px 16px; border-bottom:1px solid var(--border); background:var(--surface); flex-shrink:0; }
+.pace-setting-label { font-size:13px; color:var(--text-muted); font-weight:500; }
+.countdown-opts { display:flex; gap:4px; }
+.countdown-opt { padding:4px 10px; border-radius:8px; border:1px solid var(--border); background:var(--surface2); color:var(--text-muted); font-size:12px; font-weight:500; cursor:pointer; transition:all var(--transition); }
+.countdown-opt:hover { background:var(--surface3); color:var(--text); }
+.countdown-opt.active { background:var(--accent); border-color:var(--accent); color:#fff; }
+
 .builder-empty { text-align:center; color:var(--text-muted); font-size:14px; padding:32px 16px; line-height:1.7; }
 
 /* Step card */
