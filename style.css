@@ -217,6 +217,7 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
 .step-action-btn { width:28px; height:28px; border-radius:7px; background:var(--surface2); border:1px solid var(--border); color:var(--text-muted); font-size:12px; display:flex; align-items:center; justify-content:center; transition:all var(--transition); }
 .step-action-btn:hover:not(:disabled) { background:var(--surface3); color:var(--text); }
 .step-action-btn:disabled { opacity:.25; cursor:default; }
+.step-action-btn.danger { font-size: 18px; }
 .step-action-btn.danger:hover:not(:disabled) { background:rgba(255,60,60,.12); color:#ff4444; border-color:rgba(255,60,60,.3); }
 
 /* Extra voice cues within a step */
