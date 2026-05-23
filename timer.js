@@ -144,8 +144,13 @@ export class TimerEngine {
   _advance() {
     clearInterval(this._interval);
     this._segIndex++;
-    if (this._segIndex >= this.flatSegments.length) this._complete();
-    else this._startSegment(this._segIndex);
+    if (this._segIndex >= this.flatSegments.length) {
+      this._complete();
+    } else {
+      // One animation frame before starting the next segment so the browser
+      // can paint the 100% / "0:00" final state of the segment that just ended.
+      requestAnimationFrame(() => this._startSegment(this._segIndex));
+    }
   }
 
   _complete() {

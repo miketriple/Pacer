@@ -48,6 +48,9 @@ const state = {
 
 const pendingDeletes = new Set();
 
+// Dev console access — remove before shipping to production
+window.__pacer__ = { state, timer, cues };
+
 // ============================================================
 // 3. SERVICES
 // ============================================================
@@ -675,9 +678,13 @@ function updateTimerDisplay(tickData = null) {
     clockEl.style.fontSize = '';
     if (manualBtn) manualBtn.style.display = 'none';
     if (pauseBtn)  pauseBtn.style.display  = '';
-    clockEl.textContent    = formatTime(secondsLeft);
+    // Ceil keeps the clock at "N" for the full Nth second (changes at clean
+    // whole-second boundaries). Bar is derived from the same value so they
+    // move in lockstep — no drift between the number and the fill.
+    const displaySeconds   = Math.max(0, Math.ceil(secondsLeft));
+    clockEl.textContent    = formatTime(displaySeconds);
     progressEl.style.width =
-      `${seg.duration > 0 ? Math.min(100, (elapsedInSeg / seg.duration) * 100) : 100}%`;
+      `${seg.duration > 0 ? Math.min(100, ((seg.duration - displaySeconds) / seg.duration) * 100) : 100}%`;
   }
 
   document.querySelectorAll('.overall-dot').forEach((dot, i) => {
