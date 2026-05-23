@@ -58,7 +58,12 @@ const timer = new TimerEngine({
 
   onSegmentStart(seg, idx) {
     cues.arm(seg);
-    updateTimerDisplay();
+    // Snap bar to 0% without transition so it doesn't animate back from 100%.
+    // Restore the transition one frame later so the new segment's ticks animate normally.
+    const fill = document.getElementById('timer-progress-fill');
+    fill.style.transition = 'none';
+    updateTimerDisplay();                                          // sets width to 0%
+    requestAnimationFrame(() => { fill.style.transition = ''; }); // restore
     animatePhaseTransition();
   },
 
@@ -73,6 +78,14 @@ const timer = new TimerEngine({
       // Only count down when the step is long enough to make it meaningful
       if (tc !== 'silent' && segDur > thresh * 2) {
         cues.countdown(secondsLeft, thresh);
+      }
+      // Segment complete — bypass transition and snap bar to 100% so it
+      // visually reaches the right edge before the next segment resets it.
+      if (secondsLeft <= 0) {
+        const fill = document.getElementById('timer-progress-fill');
+        fill.style.transition = 'none';
+        fill.style.width = '100%';
+        return;
       }
     }
 
@@ -678,13 +691,13 @@ function updateTimerDisplay(tickData = null) {
     clockEl.style.fontSize = '';
     if (manualBtn) manualBtn.style.display = 'none';
     if (pauseBtn)  pauseBtn.style.display  = '';
-    // Ceil keeps the clock at "N" for the full Nth second (changes at clean
-    // whole-second boundaries). Bar is derived from the same value so they
-    // move in lockstep — no drift between the number and the fill.
+    // Ceil keeps the clock at "N" for the full Nth second — changes at clean
+    // whole-second boundaries rather than at 0.5-second marks (Math.round).
+    // The bar uses raw float elapsed so it moves smoothly and independently.
     const displaySeconds   = Math.max(0, Math.ceil(secondsLeft));
     clockEl.textContent    = formatTime(displaySeconds);
     progressEl.style.width =
-      `${seg.duration > 0 ? Math.min(100, ((seg.duration - displaySeconds) / seg.duration) * 100) : 100}%`;
+      `${seg.duration > 0 ? Math.min(100, (elapsedInSeg / seg.duration) * 100) : 100}%`;
   }
 
   document.querySelectorAll('.overall-dot').forEach((dot, i) => {

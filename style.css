@@ -318,7 +318,7 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
 .timer-step-name { font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:22px; letter-spacing:.04em; color:var(--text); margin:12px 0 16px; min-height:28px; }
 .timer-progress-wrap { width:100%; max-width:340px; margin-bottom:10px; }
 .timer-progress-bar { height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; }
-.timer-progress-fill { height:100%; background:var(--accent); border-radius:2px; box-shadow:0 0 8px var(--accent-glow); transition:width 1s linear; width:0%; }
+.timer-progress-fill { height:100%; background:var(--accent); border-radius:2px; box-shadow:0 0 8px var(--accent-glow); transition:width 0.26s linear; width:0%; }
 .timer-overall-progress { display:flex; gap:5px; justify-content:center; flex-wrap:wrap; max-width:300px; margin:8px auto; min-height:10px; }
 .overall-dot { width:7px; height:7px; border-radius:50%; background:var(--surface3); transition:background var(--transition); }
 .overall-dot.done { background:var(--accent); opacity:.5; }
