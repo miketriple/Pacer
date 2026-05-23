@@ -48,9 +48,6 @@ const state = {
 
 const pendingDeletes = new Set();
 
-// Dev console access — remove before shipping to production
-window.__pacer__ = { state, timer, cues };
-
 // ============================================================
 // 3. SERVICES
 // ============================================================
@@ -90,6 +87,9 @@ const timer = new TimerEngine({
   },
 
 });
+
+// Dev console access — remove before shipping to production
+window.__pacer__ = { state, timer, cues };
 
 // ============================================================
 // 4. UI HELPERS  (produce HTML strings — stay in app.js)
