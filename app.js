@@ -1,33 +1,23 @@
 /* ============================================================
-   PACER — app.js  v3
-   Guided rhythm for any workflow.
-   Templates loaded from templates.json
+   PACER — app.js  v4
+   Orchestrates UI, storage, navigation, and builder.
+   Domain logic lives in pace.js / utils.js.
+   Timer engine in timer.js. Voice cues in cues.js.
    ============================================================ */
 
-'use strict';
+import { genId, formatTime, escHtml } from './utils.js';
+import {
+  STEP_COLORS,
+  colorHex,
+  makeBlankStep, makeBlankGroup,
+  flattenItems, paceMeta,
+  regenIds, migratePace, findStepById,
+} from './pace.js';
+import { TimerEngine  } from './timer.js';
+import { CueScheduler } from './cues.js';
 
 // ============================================================
-// 1. CONSTANTS
-// ============================================================
-
-const STEP_COLORS = {
-  red:    '#ff4444',
-  orange: '#ff8c00',
-  yellow: '#ffd700',
-  green:  '#39c759',
-  teal:   '#00c9a7',
-  blue:   '#4488ff',
-  purple: '#a044ff',
-  pink:   '#ff44aa',
-  white:  '#e8e8e8',
-  grey:   '#888888',
-};
-
-const DEFAULT_COLOR = 'blue';
-const DEFAULT_STEP_DURATION = 60;
-
-// ============================================================
-// 2. TEMPLATE LOADING
+// 1. TEMPLATE LOADING
 // ============================================================
 
 let TEMPLATES = [];
@@ -37,92 +27,70 @@ async function loadTemplates() {
     const res = await fetch('templates.json');
     if (!res.ok) throw new Error(res.status);
     TEMPLATES = await res.json();
-  } catch(e) {
+  } catch (e) {
     console.warn('Could not load templates.json', e);
     TEMPLATES = [];
   }
 }
 
 // ============================================================
-// 3. STATE
+// 2. STATE
 // ============================================================
 
-let paces               = [];
-let editingPace         = null;
-let activePace          = null;
-let flatSegments        = [];
-let segmentIndex        = 0;
-let secondsLeft         = 0;
-let segmentDuration     = 0;
-let timerInterval       = null;
-let isPaused            = false;
-let totalElapsedSeconds = 0;
-const pendingDeletes    = new Set();
-
-let settings = {
-  theme: 'venom', mode: 'system', apiUrl: '', apiKey: '', voiceName: '',
+const state = {
+  paces:       [],
+  editingPace: null,
+  activePace:  null,
+  settings: {
+    theme: 'venom', mode: 'system', apiUrl: '', apiKey: '', voiceName: '',
+  },
 };
 
+const pendingDeletes = new Set();
+
 // ============================================================
-// 4. UTILITIES
+// 3. SERVICES
 // ============================================================
 
-function genId() {
-  return '_' + Math.random().toString(36).slice(2, 9);
-}
+const cues  = new CueScheduler();
 
-function formatTime(sec) {
-  const s = Math.abs(Math.round(sec));
-  return `${Math.floor(s/60).toString().padStart(2,'0')}:${(s%60).toString().padStart(2,'0')}`;
-}
+const timer = new TimerEngine({
 
-function escHtml(str) {
-  return String(str ?? '').replace(/[&<>"']/g, c =>
-    ({ '&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;' })[c]);
-}
+  onSegmentStart(seg, idx) {
+    cues.arm(seg);
+    updateTimerDisplay();
+    animatePhaseTransition();
+  },
 
-function colorHex(colorKey) {
-  return STEP_COLORS[colorKey] || STEP_COLORS[DEFAULT_COLOR];
-}
+  onTick(tickData) {
+    const { secondsLeft, elapsedInSegment, isManual } = tickData;
+    cues.tick(elapsedInSegment);
 
-function makeBlankStep() {
-  const step = {
-    type: 'step', id: genId(),
-    name: 'Step', duration: DEFAULT_STEP_DURATION,
-    color: DEFAULT_COLOR,
-    voiceCues: [],
-  };
-  step.voiceCues = [{ id: genId(), offsetSeconds: 0, text: step.name }];
-  return step;
-}
-
-function makeBlankGroup() {
-  return { type: 'group', id: genId(), name: 'Group', repeats: 3, steps: [makeBlankStep(), makeBlankStep()] };
-}
-
-function flattenItems(items) {
-  if (!Array.isArray(items)) return [];
-  const result = [];
-  for (const item of items) {
-    if (item.type === 'step') {
-      result.push(item);
-    } else if (item.type === 'group') {
-      for (let r = 0; r < (item.repeats || 1); r++) {
-        for (const step of (item.steps || [])) {
-          result.push({ ...step, _groupName: item.name, _repeat: r + 1, _totalRepeats: item.repeats });
-        }
+    if (!isManual) {
+      const tc     = state.activePace?.transitionCountdown ?? '5';
+      const thresh = Number(tc);
+      const segDur = timer.flatSegments[timer.segmentIndex]?.duration ?? 0;
+      // Only count down when the step is long enough to make it meaningful
+      if (tc !== 'silent' && segDur > thresh * 2) {
+        cues.countdown(secondsLeft, thresh);
       }
     }
-  }
-  return result;
-}
 
-function paceMeta(pace) {
-  const steps = flattenItems(pace.items);
-  const total = steps.reduce((a, s) => a + (s.duration || 0), 0);
-  const stepCount = steps.length;
-  return `${stepCount} step${stepCount !== 1 ? 's' : ''} · ${formatTime(total)}`;
-}
+    updateTimerDisplay(tickData);
+  },
+
+  onComplete(totalElapsedSeconds) {
+    cues.speak('Pace complete. Well done!');
+    document.getElementById('complete-name').textContent = state.activePace?.name || '';
+    document.getElementById('complete-time').textContent = 'Total: ' + formatTime(totalElapsedSeconds);
+    showScreen('complete');
+  },
+
+});
+
+// ============================================================
+// 4. UI HELPERS  (produce HTML strings — stay in app.js)
+// ============================================================
 
 function paceColorDots(pace) {
   return flattenItems(pace.items).slice(0, 5)
@@ -136,70 +104,37 @@ function templateColorDots(items) {
     .join('');
 }
 
-/** Ensure every item has a fresh unique ID (used when cloning templates) */
-function regenIds(items) {
-  if (!Array.isArray(items)) return;
-  items.forEach(item => {
-    item.id = genId();
-    if (item.type === 'group') regenIds(item.steps);
-    if (Array.isArray(item.voiceCues)) item.voiceCues.forEach(c => c.id = genId());
-  });
-}
-
 // ============================================================
-// 5. MIGRATION (old format → new items-based format)
-// ============================================================
-
-function migratePace(pace) {
-  if (Array.isArray(pace.items)) return pace;
-  const items = [];
-  if (Array.isArray(pace.segments)) {
-    pace.segments.forEach(seg => {
-      items.push({
-        type: 'step', id: genId(),
-        name: seg.label || 'Step',
-        duration: seg.duration || 60,
-        color: seg.phase === 'work' ? 'red' : seg.phase === 'rest' ? 'blue' :
-               seg.phase === 'warmup' ? 'yellow' : seg.phase === 'cooldown' ? 'teal' : DEFAULT_COLOR,
-        voiceCues: [{ id: genId(), offsetSeconds: 0, text: seg.label || 'Step' }],
-      });
-    });
-  } else if (pace.type === 'interval') {
-    if (pace.warmupDuration > 0)
-      items.push({ type:'step', id:genId(), name:'Warm Up', duration:pace.warmupDuration, color:'yellow', voiceCues:[{id:genId(),offsetSeconds:0,text:'Warm up.'}] });
-    const gs = [];
-    gs.push({ type:'step', id:genId(), name:'Work', duration:pace.workDuration||40, color:'red', voiceCues:[{id:genId(),offsetSeconds:0,text:'Begin!'}] });
-    if (pace.restDuration > 0)
-      gs.push({ type:'step', id:genId(), name:'Rest', duration:pace.restDuration, color:'blue', voiceCues:[{id:genId(),offsetSeconds:0,text:'Rest.'}] });
-    items.push({ type:'group', id:genId(), name:'Round', repeats:pace.rounds||1, steps:gs });
-    if (pace.cooldownDuration > 0)
-      items.push({ type:'step', id:genId(), name:'Cool Down', duration:pace.cooldownDuration, color:'teal', voiceCues:[{id:genId(),offsetSeconds:0,text:'Cool down.'}] });
-  }
-  return { ...pace, items, type: 'custom' };
-}
-
-// ============================================================
-// 6. STORAGE & SYNC
+// 5. STORAGE & SYNC
 // ============================================================
 
 function loadSettings() {
-  try { const s = localStorage.getItem('pacer_settings'); if (s) Object.assign(settings, JSON.parse(s)); } catch(e){}
+  try {
+    const s = localStorage.getItem('pacer_settings');
+    if (s) Object.assign(state.settings, JSON.parse(s));
+  } catch (e) {}
 }
-function saveSettings() { localStorage.setItem('pacer_settings', JSON.stringify(settings)); }
+
+function saveSettings() {
+  localStorage.setItem('pacer_settings', JSON.stringify(state.settings));
+}
 
 function loadLocalPaces() {
   try {
     const s = localStorage.getItem('pacer_paces');
     if (!s) return [];
     return JSON.parse(s).map(migratePace);
-  } catch(e) { return []; }
+  } catch (e) { return []; }
 }
-function saveLocalPaces() { localStorage.setItem('pacer_paces', JSON.stringify(paces)); }
+
+function saveLocalPaces() {
+  localStorage.setItem('pacer_paces', JSON.stringify(state.paces));
+}
 
 async function apiRequest(method, path, body = null) {
-  if (!settings.apiUrl || !settings.apiKey) throw new Error('API not configured');
-  const url = settings.apiUrl.replace(/\/$/, '') + path;
-  const opts = { method, headers: { 'Content-Type': 'application/json', 'X-API-Key': settings.apiKey } };
+  if (!state.settings.apiUrl || !state.settings.apiKey) throw new Error('API not configured');
+  const url  = state.settings.apiUrl.replace(/\/$/, '') + path;
+  const opts = { method, headers: { 'Content-Type': 'application/json', 'X-API-Key': state.settings.apiKey } };
   if (body) opts.body = JSON.stringify(body);
   const res = await fetch(url, opts);
   if (!res.ok) throw new Error(`${res.status}`);
@@ -207,45 +142,47 @@ async function apiRequest(method, path, body = null) {
 }
 
 async function syncPaces() {
-  if (!settings.apiUrl || !settings.apiKey) return;
+  if (!state.settings.apiUrl || !state.settings.apiKey) return;
   setSyncStatus('Syncing…');
   try {
-    const data = await apiRequest('GET', '/workouts');
-    paces = (data.workouts || data)
+    const data    = await apiRequest('GET', '/workouts');
+    state.paces   = (data.workouts || data)
       .filter(p => !pendingDeletes.has(p.id))
       .map(migratePace);
     saveLocalPaces();
     setSyncStatus('Synced', 'ok');
     renderPaceList();
-  } catch(e) { setSyncStatus('Offline — using local data', 'error'); }
+  } catch (e) {
+    setSyncStatus('Offline — using local data', 'error');
+  }
 }
 
 async function persistPace(pace) {
-  const idx = paces.findIndex(p => p.id === pace.id);
-  if (idx >= 0) paces[idx] = pace; else paces.unshift(pace);
+  const idx = state.paces.findIndex(p => p.id === pace.id);
+  if (idx >= 0) state.paces[idx] = pace; else state.paces.unshift(pace);
   saveLocalPaces();
   renderPaceList();
-  try { await apiRequest('PUT', `/workouts/${pace.id}`, pace); } catch(e){}
+  try { await apiRequest('PUT', `/workouts/${pace.id}`, pace); } catch (e) {}
 }
 
 async function deletePace(id) {
   pendingDeletes.add(id);
-  paces = paces.filter(p => p.id !== id);
+  state.paces = state.paces.filter(p => p.id !== id);
   saveLocalPaces();
   renderPaceList();
-  try { await apiRequest('DELETE', `/workouts/${id}`); pendingDeletes.delete(id); } catch(e){}
+  try { await apiRequest('DELETE', `/workouts/${id}`); pendingDeletes.delete(id); } catch (e) {}
 }
 
 function setSyncStatus(msg, cls = '') {
   const el = document.getElementById('sync-status');
   if (!el) return;
   el.textContent = msg;
-  el.className = 'sync-status' + (cls ? ' ' + cls : '');
+  el.className   = 'sync-status' + (cls ? ' ' + cls : '');
   if (cls === 'ok') setTimeout(() => { el.textContent = ''; el.className = 'sync-status'; }, 3000);
 }
 
 // ============================================================
-// 7. NAVIGATION
+// 6. NAVIGATION
 // ============================================================
 
 function showScreen(id) {
@@ -254,12 +191,12 @@ function showScreen(id) {
 }
 
 // ============================================================
-// 8. HOME SCREEN
+// 7. HOME SCREEN
 // ============================================================
 
 function renderPaceList() {
   const container = document.getElementById('pace-list');
-  if (!paces.length) {
+  if (!state.paces.length) {
     container.innerHTML = `<div class="pace-empty">
       <div class="pace-empty-title">No paces yet</div>
       Tap <strong>+ New Pace</strong> to build your first guided rhythm.
@@ -269,7 +206,7 @@ function renderPaceList() {
   container.innerHTML = `<div class="pace-group-title">My Paces</div>
     <div class="pace-group-body" id="pace-group-body"></div>`;
   const body = document.getElementById('pace-group-body');
-  paces.forEach(pace => body.appendChild(makePaceCard(pace)));
+  state.paces.forEach(pace => body.appendChild(makePaceCard(pace)));
 }
 
 function makePaceCard(pace) {
@@ -287,7 +224,7 @@ function makePaceCard(pace) {
 }
 
 // ============================================================
-// 9. TEMPLATE PICKER
+// 8. TEMPLATE PICKER
 // ============================================================
 
 function showTemplatePicker() {
@@ -304,36 +241,33 @@ function showTemplatePicker() {
     const catEl = document.createElement('div');
     catEl.className = 'template-category';
 
-    // Category header — starts COLLAPSED
     const catHeader = document.createElement('button');
     catHeader.className = 'template-cat-header';
     catHeader.innerHTML = `<span class="template-cat-title">${escHtml(cat.category)}</span><span class="template-cat-chevron">▶</span>`;
     catEl.appendChild(catHeader);
 
     const catBody = document.createElement('div');
-    catBody.className = 'template-cat-body collapsed'; // starts collapsed
+    catBody.className = 'template-cat-body collapsed';
 
     (cat.subcategories || []).forEach(sub => {
       const subEl = document.createElement('div');
       subEl.className = 'template-subcategory';
 
-      // Subcategory header — starts COLLAPSED
       const subHeader = document.createElement('button');
       subHeader.className = 'template-sub-header';
       subHeader.innerHTML = `<span class="template-sub-title">${escHtml(sub.name)}</span><span class="template-sub-chevron">▶</span>`;
       subEl.appendChild(subHeader);
 
-      const subBody = document.createElement('div');
-      subBody.className = 'template-sub-body collapsed'; // starts collapsed
-      const cards = document.createElement('div');
+      const subBody  = document.createElement('div');
+      subBody.className = 'template-sub-body collapsed';
+      const cards    = document.createElement('div');
       cards.className = 'template-cards';
 
       (sub.templates || []).forEach(tpl => {
         const btn = document.createElement('button');
         btn.className = 'template-card';
-        const dots = templateColorDots(tpl.items || []);
         btn.innerHTML = `
-          <div class="template-card-dots">${dots}</div>
+          <div class="template-card-dots">${templateColorDots(tpl.items || [])}</div>
           <div class="template-card-info">
             <div class="template-card-name">${escHtml(tpl.name)}</div>
             <div class="template-card-desc">${escHtml(tpl.description || '')}</div>
@@ -345,7 +279,6 @@ function showTemplatePicker() {
 
       subBody.appendChild(cards);
       subEl.appendChild(subBody);
-
       subHeader.addEventListener('click', () => {
         const collapsed = subBody.classList.toggle('collapsed');
         subHeader.querySelector('.template-sub-chevron').textContent = collapsed ? '▶' : '▼';
@@ -368,8 +301,8 @@ function showTemplatePicker() {
 
 function openBuilderFromTemplate(tpl) {
   const pace = {
-    id: genId(),
-    name: tpl.name,
+    id:    genId(),
+    name:  tpl.name,
     items: JSON.parse(JSON.stringify(tpl.items || [])),
     isNew: true,
   };
@@ -378,29 +311,29 @@ function openBuilderFromTemplate(tpl) {
 }
 
 // ============================================================
-// 10. BUILDER
+// 9. BUILDER
 // ============================================================
 
 function syncCountdownUI() {
-  const val = String(editingPace.transitionCountdown ?? '5');
+  const val = String(state.editingPace.transitionCountdown ?? '5');
   document.querySelectorAll('#countdown-opts .countdown-opt').forEach(btn => {
     btn.classList.toggle('active', btn.dataset.value === val);
   });
 }
 
 function openBuilder(pace) {
-  editingPace = JSON.parse(JSON.stringify(pace));
-  editingPace.items = editingPace.items || [];
-  document.getElementById('builder-pace-name').value = editingPace.name || '';
+  state.editingPace       = JSON.parse(JSON.stringify(pace));
+  state.editingPace.items = state.editingPace.items || [];
+  document.getElementById('builder-pace-name').value = state.editingPace.name || '';
   document.getElementById('btn-delete-pace').style.visibility =
-    (editingPace.isNew || !paces.find(p => p.id === editingPace.id)) ? 'hidden' : 'visible';
+    (state.editingPace.isNew || !state.paces.find(p => p.id === state.editingPace.id)) ? 'hidden' : 'visible';
   syncCountdownUI();
   renderBuilder();
   showScreen('builder');
 }
 
 function openBlankBuilder() {
-  editingPace = { id: genId(), name: '', items: [], isNew: true, transitionCountdown: '5' };
+  state.editingPace = { id: genId(), name: '', items: [], isNew: true, transitionCountdown: '5' };
   document.getElementById('builder-pace-name').value = '';
   document.getElementById('btn-delete-pace').style.visibility = 'hidden';
   syncCountdownUI();
@@ -411,7 +344,7 @@ function openBlankBuilder() {
 function renderBuilder() {
   const container = document.getElementById('builder-content');
   container.innerHTML = '';
-  const items = editingPace.items || [];
+  const items = state.editingPace.items || [];
 
   if (items.length === 0) {
     const empty = document.createElement('div');
@@ -422,11 +355,8 @@ function renderBuilder() {
   }
 
   items.forEach((item, idx) => {
-    if (item.type === 'step') {
-      container.appendChild(buildStepCard(item, idx, null));
-    } else if (item.type === 'group') {
-      container.appendChild(buildGroupCard(item, idx));
-    }
+    if (item.type === 'step')       container.appendChild(buildStepCard(item, idx, null));
+    else if (item.type === 'group') container.appendChild(buildGroupCard(item, idx));
   });
 }
 
@@ -434,16 +364,16 @@ function renderBuilder() {
 
 function buildStepCard(step, itemIdx, groupIdx) {
   const inGroup = groupIdx !== null;
-  const card = document.createElement('div');
-  card.className = inGroup ? 'step-card group-step' : 'step-card';
+  const card    = document.createElement('div');
+  card.className  = inGroup ? 'step-card group-step' : 'step-card';
   card.dataset.id = step.id;
 
-  const isManual = step.duration === 0;
-  const mins = Math.floor((step.duration || 0) / 60);
-  const secs = (step.duration || 0) % 60;
-  const startCue = step.voiceCues?.[0] ?? null;
+  const isManual  = step.duration === 0;
+  const mins      = Math.floor((step.duration || 0) / 60);
+  const secs      = (step.duration || 0) % 60;
+  const startCue  = step.voiceCues?.[0] ?? null;
   const extraCues = (step.voiceCues || []).slice(1);
-  const isSilent = !startCue || !startCue.text;
+  const isSilent  = !startCue || !startCue.text;
 
   const extraCuesHtml = extraCues.map((cue, ci) => `
     <div class="extra-cue-row" data-cue-idx="${ci + 1}">
@@ -454,8 +384,8 @@ function buildStepCard(step, itemIdx, groupIdx) {
     </div>`).join('');
 
   const totalItems = inGroup
-    ? (editingPace.items[groupIdx]?.steps?.length ?? 0)
-    : editingPace.items.length;
+    ? (state.editingPace.items[groupIdx]?.steps?.length ?? 0)
+    : state.editingPace.items.length;
 
   card.innerHTML = `
     <div class="step-card-main">
@@ -471,7 +401,7 @@ function buildStepCard(step, itemIdx, groupIdx) {
       <div class="step-duration-wrap ${isManual ? 'hidden' : ''}">
         <input type="number" class="step-time-input" data-part="min" value="${mins}" min="0" max="99" aria-label="Minutes">
         <span class="step-colon">:</span>
-        <input type="number" class="step-time-input" data-part="sec" value="${String(secs).padStart(2,'0')}" min="0" max="59" aria-label="Seconds">
+        <input type="number" class="step-time-input" data-part="sec" value="${String(secs).padStart(2, '0')}" min="0" max="59" aria-label="Seconds">
       </div>
     </div>
     <div class="step-card-actions">
@@ -495,18 +425,17 @@ function buildStepCard(step, itemIdx, groupIdx) {
       ).join('')}
     </div>`;
 
-  // Wire up events
-  const nameInput   = card.querySelector('.step-name-input');
-  const voiceInput  = card.querySelector('.step-voice-input');
-  const voiceClear  = card.querySelector('.step-voice-clear');
-  const voiceIcon   = card.querySelector('.step-voice-icon');
-  const colorDot    = card.querySelector('.step-color-dot');
-  const colorPicker = card.querySelector('.color-picker');
+  // Wire events
+  const nameInput    = card.querySelector('.step-name-input');
+  const voiceInput   = card.querySelector('.step-voice-input');
+  const voiceClear   = card.querySelector('.step-voice-clear');
+  const voiceIcon    = card.querySelector('.step-voice-icon');
+  const colorDot     = card.querySelector('.step-color-dot');
+  const colorPicker  = card.querySelector('.color-picker');
   const durationWrap = card.querySelector('.step-duration-wrap');
 
   nameInput.addEventListener('input', () => { step.name = nameInput.value; });
 
-  // End Step toggle
   card.querySelectorAll('.step-end-btn').forEach(btn => {
     btn.addEventListener('click', () => {
       card.querySelectorAll('.step-end-btn').forEach(b => b.classList.remove('active'));
@@ -515,12 +444,11 @@ function buildStepCard(step, itemIdx, groupIdx) {
         step.duration = 0;
         durationWrap.classList.add('hidden');
       } else {
-        // Restore a sensible default if switching back to duration
         if (!step.duration) step.duration = 60;
         const m = Math.floor(step.duration / 60);
         const s = step.duration % 60;
         card.querySelector('[data-part="min"]').value = m;
-        card.querySelector('[data-part="sec"]').value = String(s).padStart(2,'0');
+        card.querySelector('[data-part="sec"]').value = String(s).padStart(2, '0');
         durationWrap.classList.remove('hidden');
       }
     });
@@ -534,7 +462,7 @@ function buildStepCard(step, itemIdx, groupIdx) {
     });
   });
 
-  if (!step.voiceCues) step.voiceCues = [];
+  if (!step.voiceCues)    step.voiceCues    = [];
   if (!step.voiceCues[0]) step.voiceCues[0] = { id: genId(), offsetSeconds: 0, text: step.name };
 
   voiceInput.addEventListener('input', () => {
@@ -542,7 +470,7 @@ function buildStepCard(step, itemIdx, groupIdx) {
     voiceIcon.classList.toggle('silent', !voiceInput.value.trim());
   });
   voiceClear.addEventListener('click', () => {
-    voiceInput.value = '';
+    voiceInput.value       = '';
     step.voiceCues[0].text = '';
     voiceIcon.classList.add('silent');
   });
@@ -562,7 +490,7 @@ function buildStepCard(step, itemIdx, groupIdx) {
 
   card.querySelector('.add-voice-cue-btn').addEventListener('click', () => {
     step.voiceCues.push({ id: genId(), offsetSeconds: 30, text: '' });
-    const parent = card.parentElement;
+    const parent  = card.parentElement;
     const newCard = buildStepCard(step, itemIdx, groupIdx);
     parent.replaceChild(newCard, card);
     newCard.querySelector('.step-extra-cues')?.lastElementChild?.querySelector('.extra-cue-text')?.focus();
@@ -572,11 +500,8 @@ function buildStepCard(step, itemIdx, groupIdx) {
     btn.addEventListener('click', () => {
       syncBuilderState();
       const action = btn.dataset.action;
-      if (inGroup) {
-        handleStepAction(action, editingPace.items[groupIdx].steps, itemIdx);
-      } else {
-        handleStepAction(action, editingPace.items, itemIdx);
-      }
+      if (inGroup) handleStepAction(action, state.editingPace.items[groupIdx].steps, itemIdx);
+      else         handleStepAction(action, state.editingPace.items, itemIdx);
       renderBuilder();
     });
   });
@@ -601,10 +526,10 @@ function wireExtraCues(container, step) {
 }
 
 function handleStepAction(action, arr, idx) {
-  switch(action) {
-    case 'up':   if (idx > 0) [arr[idx-1], arr[idx]] = [arr[idx], arr[idx-1]]; break;
-    case 'down': if (idx < arr.length-1) [arr[idx], arr[idx+1]] = [arr[idx+1], arr[idx]]; break;
-    case 'dup':  arr.splice(idx+1, 0, JSON.parse(JSON.stringify(arr[idx]))); regenIds([arr[idx+1]]); break;
+  switch (action) {
+    case 'up':   if (idx > 0)              [arr[idx - 1], arr[idx]] = [arr[idx], arr[idx - 1]]; break;
+    case 'down': if (idx < arr.length - 1) [arr[idx], arr[idx + 1]] = [arr[idx + 1], arr[idx]]; break;
+    case 'dup':  arr.splice(idx + 1, 0, JSON.parse(JSON.stringify(arr[idx]))); regenIds([arr[idx + 1]]); break;
     case 'del':  if (arr.length > 1) arr.splice(idx, 1); break;
   }
 }
@@ -613,7 +538,7 @@ function handleStepAction(action, arr, idx) {
 
 function buildGroupCard(group, groupIdx) {
   const card = document.createElement('div');
-  card.className = 'group-card';
+  card.className  = 'group-card';
   card.dataset.id = group.id;
 
   const header = document.createElement('div');
@@ -633,7 +558,7 @@ function buildGroupCard(group, groupIdx) {
   header.querySelector('.step-action-btn.danger').addEventListener('click', () => {
     if (confirm(`Remove group "${group.name || 'Group'}"?`)) {
       syncBuilderState();
-      editingPace.items.splice(groupIdx, 1);
+      state.editingPace.items.splice(groupIdx, 1);
       renderBuilder();
     }
   });
@@ -650,7 +575,7 @@ function buildGroupCard(group, groupIdx) {
   const footer = document.createElement('div');
   footer.className = 'group-footer';
   const addBtn = document.createElement('button');
-  addBtn.className = 'add-to-group-btn';
+  addBtn.className   = 'add-to-group-btn';
   addBtn.textContent = '+ Add Step';
   addBtn.addEventListener('click', () => {
     syncBuilderState();
@@ -663,13 +588,13 @@ function buildGroupCard(group, groupIdx) {
   return card;
 }
 
-// ---- Sync builder state back to editingPace ----
+// ---- Sync builder DOM → state ----
 
 function syncBuilderState() {
-  editingPace.name = document.getElementById('builder-pace-name').value.trim();
+  state.editingPace.name = document.getElementById('builder-pace-name').value.trim();
 
   document.querySelectorAll('.step-card[data-id]').forEach(card => {
-    const step = findStepById(editingPace.items, card.dataset.id);
+    const step    = findStepById(state.editingPace.items, card.dataset.id);
     if (!step) return;
     const nameEl  = card.querySelector('.step-name-input');
     const minEl   = card.querySelector('[data-part="min"]');
@@ -677,161 +602,53 @@ function syncBuilderState() {
     const voiceEl = card.querySelector('.step-voice-input');
     if (nameEl) step.name = nameEl.value;
     if (minEl && secEl) {
-      const onTap = card.querySelector('.step-end-btn[data-end="ontap"]')?.classList.contains('active');
-      step.duration = onTap ? 0 : (parseInt(minEl.value)||0)*60 + Math.min(59,parseInt(secEl.value)||0);
+      const onTap   = card.querySelector('.step-end-btn[data-end="ontap"]')?.classList.contains('active');
+      step.duration = onTap ? 0 : (parseInt(minEl.value) || 0) * 60 + Math.min(59, parseInt(secEl.value) || 0);
     }
     if (voiceEl && step.voiceCues?.[0]) step.voiceCues[0].text = voiceEl.value;
   });
 
   document.querySelectorAll('.group-card[data-id]').forEach(card => {
-    const group = editingPace.items.find(i => i.id === card.dataset.id);
+    const group  = state.editingPace.items.find(i => i.id === card.dataset.id);
     if (!group) return;
     const nameEl = card.querySelector('.group-name-input');
     const repEl  = card.querySelector('.group-repeats-input');
-    if (nameEl) group.name = nameEl.value;
+    if (nameEl) group.name    = nameEl.value;
     if (repEl)  group.repeats = parseInt(repEl.value) || 1;
   });
 }
 
-function findStepById(items, id) {
-  for (const item of items) {
-    if (item.type === 'step' && item.id === id) return item;
-    if (item.type === 'group') {
-      const found = (item.steps || []).find(s => s.id === id);
-      if (found) return found;
-    }
-  }
-  return null;
-}
-
 function savePaceFromBuilder() {
   syncBuilderState();
-  editingPace.name = editingPace.name || 'My Pace';
-  delete editingPace.isNew;
-  return editingPace;
+  state.editingPace.name = state.editingPace.name || 'My Pace';
+  delete state.editingPace.isNew;
+  return state.editingPace;
 }
 
 // ============================================================
-// 11. TIMER ENGINE
+// 10. TIMER
 // ============================================================
 
 function startPace(pace) {
-  activePace          = pace;
-  flatSegments        = flattenItems(pace.items);
-  segmentIndex        = 0;
-  isPaused            = false;
-  totalElapsedSeconds = 0;
+  const flat = flattenItems(pace.items);
+  if (!flat.length) { alert('This pace has no steps.'); return; }
 
-  if (!flatSegments.length) { alert('This pace has no steps.'); return; }
-
+  state.activePace = pace;
+  cues.setVoice(state.settings.voiceName);
   document.getElementById('timer-pace-name').textContent = pace.name || 'Pacer';
-  buildOverallDots();
+  buildOverallDots(flat.length);
   showScreen('timer');
-  startSegment(0);
+  timer.start(flat);
 }
 
-function startSegment(idx) {
-  const seg = flatSegments[idx];
-  if (!seg) { completePace(); return; }
-  segmentIndex    = idx;
-  segmentDuration = seg.duration || 0;
-  secondsLeft     = seg.duration || 0;
-
-  speakSegmentStart(seg);
-  updateTimerDisplay();
-  animatePhaseTransition();
-
-  clearInterval(timerInterval);
-
-  if (seg.duration === 0) {
-    // Manual step — count up elapsed, fire voice cues, wait for user tap
-    timerInterval = setInterval(tickManual, 1000);
-  } else {
-    timerInterval = setInterval(tick, 1000);
-  }
-}
-
-// Elapsed counter for manual steps
-let manualElapsed = 0;
-
-function tickManual() {
-  if (isPaused) return;
-  manualElapsed++;
-  totalElapsedSeconds++;
-  checkVoiceCues(segmentIndex, manualElapsed);
-  // Update elapsed display
-  const clockEl = document.getElementById('timer-clock');
-  if (clockEl) clockEl.textContent = formatTime(manualElapsed);
-}
-
-function advanceManualStep() {
-  clearInterval(timerInterval);
-  manualElapsed = 0;
-  segmentIndex++;
-  if (segmentIndex >= flatSegments.length) completePace();
-  else startSegment(segmentIndex);
-}
-
-function tick() {
-  if (isPaused) return;
-  secondsLeft--;
-  totalElapsedSeconds++;
-
-  const tc = activePace.transitionCountdown ?? '5';
-  if (tc !== 'silent' && secondsLeft <= Number(tc) && secondsLeft > 0 && segmentDuration > Number(tc) * 2) speak(String(secondsLeft));
-  checkVoiceCues(segmentIndex, segmentDuration - secondsLeft);
-  updateTimerDisplay();
-
-  if (secondsLeft <= 0) {
-    segmentIndex++;
-    if (segmentIndex >= flatSegments.length) completePace();
-    else startSegment(segmentIndex);
-  }
-}
-
-function pauseTimer() {
-  isPaused = true;
-  clearInterval(timerInterval);
-  document.getElementById('btn-pause-resume').textContent = 'Resume';
-  document.getElementById('timer-clock').classList.add('paused');
-}
-
-function resumeTimer() {
-  isPaused = false;
-  document.getElementById('btn-pause-resume').textContent = 'Pause';
-  document.getElementById('timer-clock').classList.remove('paused');
-  timerInterval = setInterval(tick, 1000);
-}
-
-function restartPaceTimer() {
-  clearInterval(timerInterval);
-  isPaused = false;
-  totalElapsedSeconds = 0;
-  manualElapsed = 0;
-  document.getElementById('btn-pause-resume').textContent = 'Pause';
-  document.getElementById('timer-clock').classList.remove('paused');
-  startSegment(0);
-}
-
-function endPace() {
-  clearInterval(timerInterval);
-  activePace   = null;
-  flatSegments = [];
-  isPaused     = false;
-}
-
-function completePace() {
-  clearInterval(timerInterval);
-  speak('Pace complete. Well done!');
-  document.getElementById('complete-name').textContent = activePace?.name || '';
-  document.getElementById('complete-time').textContent = 'Total: ' + formatTime(totalElapsedSeconds);
-  showScreen('complete');
-}
-
-function updateTimerDisplay() {
-  const seg = flatSegments[segmentIndex];
+function updateTimerDisplay(tickData = null) {
+  const idx = timer.segmentIndex;
+  const seg = timer.flatSegments[idx];
   if (!seg) return;
-  const isManual = seg.duration === 0;
+
+  const isManual     = seg.duration === 0;
+  const secondsLeft  = tickData ? tickData.secondsLeft      : (isManual ? 0 : seg.duration);
+  const elapsedInSeg = tickData ? tickData.elapsedInSegment : 0;
 
   let phaseLabel = '';
   if (seg._groupName && seg._totalRepeats > 1) {
@@ -840,7 +657,7 @@ function updateTimerDisplay() {
     phaseLabel = seg._groupName.toUpperCase();
   }
   document.getElementById('timer-phase-label').textContent = phaseLabel;
-  document.getElementById('timer-step-name').textContent = seg.name || '';
+  document.getElementById('timer-step-name').textContent   = seg.name || '';
 
   const clockEl    = document.getElementById('timer-clock');
   const manualBtn  = document.getElementById('btn-manual-next');
@@ -848,10 +665,9 @@ function updateTimerDisplay() {
   const progressEl = document.getElementById('timer-progress-fill');
 
   if (isManual) {
-    // Show elapsed counter, hide progress bar, show Done button, hide Pause
-    clockEl.textContent = formatTime(manualElapsed);
-    clockEl.classList.remove('paused');
+    clockEl.textContent    = formatTime(elapsedInSeg);
     clockEl.style.fontSize = 'clamp(28px, 8vw, 42px)';
+    clockEl.classList.remove('paused');
     if (manualBtn) manualBtn.style.display = 'flex';
     if (pauseBtn)  pauseBtn.style.display  = 'none';
     progressEl.style.width = '0%';
@@ -859,29 +675,27 @@ function updateTimerDisplay() {
     clockEl.style.fontSize = '';
     if (manualBtn) manualBtn.style.display = 'none';
     if (pauseBtn)  pauseBtn.style.display  = '';
-    clockEl.textContent = formatTime(secondsLeft);
-
-    const elapsed = segmentDuration - secondsLeft;
+    clockEl.textContent    = formatTime(secondsLeft);
     progressEl.style.width =
-      `${segmentDuration > 0 ? Math.min(100, (elapsed / segmentDuration) * 100) : 100}%`;
+      `${seg.duration > 0 ? Math.min(100, (elapsedInSeg / seg.duration) * 100) : 100}%`;
   }
 
   document.querySelectorAll('.overall-dot').forEach((dot, i) => {
-    dot.classList.remove('done','active');
-    if (i < segmentIndex) dot.classList.add('done');
-    else if (i === segmentIndex) dot.classList.add('active');
+    dot.classList.remove('done', 'active');
+    if (i < idx)        dot.classList.add('done');
+    else if (i === idx) dot.classList.add('active');
   });
 
-  const next = flatSegments[segmentIndex + 1];
+  const next = timer.flatSegments[idx + 1];
   document.getElementById('timer-next').textContent = next
     ? `Next: ${next.name}${next.duration > 0 ? ' · ' + formatTime(next.duration) : ' · On Tap'}`
     : 'Final step';
 }
 
-function buildOverallDots() {
+function buildOverallDots(count) {
   const container = document.getElementById('timer-overall-progress');
   container.innerHTML = '';
-  const max = Math.min(flatSegments.length, 40);
+  const max = Math.min(count, 40);
   for (let i = 0; i < max; i++) {
     const dot = document.createElement('div');
     dot.className = 'overall-dot';
@@ -897,73 +711,63 @@ function animatePhaseTransition() {
   body.classList.add('phase-transition');
 }
 
-// ============================================================
-// 12. SPEECH
-// ============================================================
-
-const synth = window.speechSynthesis;
-
-if (synth) {
-  synth.onvoiceschanged = () => populateVoicePicker();
-  setTimeout(populateVoicePicker, 100);
+function pauseTimer() {
+  timer.pause();
+  document.getElementById('btn-pause-resume').textContent = 'Resume';
+  document.getElementById('timer-clock').classList.add('paused');
 }
 
-function speak(text) {
-  if (!synth || !text) return;
-  synth.cancel();
-  const u = new SpeechSynthesisUtterance(text);
-  u.rate = 1.1; u.pitch = 1.0; u.volume = 1.0;
-  if (settings.voiceName) {
-    const voice = synth.getVoices().find(v => v.name === settings.voiceName);
-    if (voice) u.voice = voice;
-  }
-  synth.speak(u);
+function resumeTimer() {
+  timer.resume();
+  document.getElementById('btn-pause-resume').textContent = 'Pause';
+  document.getElementById('timer-clock').classList.remove('paused');
 }
 
-function speakSegmentStart(seg) {
-  const cue = seg.voiceCues?.[0];
-  const text = (cue && cue.text) ? cue.text : seg.name;
-  if (text) speak(text);
+function restartPaceTimer() {
+  cues.stop();
+  timer.restart();
+  document.getElementById('btn-pause-resume').textContent = 'Pause';
+  document.getElementById('timer-clock').classList.remove('paused');
 }
 
-function checkVoiceCues(segIdx, elapsedSeconds) {
-  const seg = flatSegments[segIdx];
-  if (!seg?.voiceCues) return;
-  seg.voiceCues.slice(1).forEach(cue => {
-    if (cue.offsetSeconds === elapsedSeconds && cue.text) speak(cue.text);
-  });
+function endPace() {
+  timer.stop();
+  cues.stop();
+  state.activePace = null;
 }
 
 // ============================================================
-// 13. SETTINGS
+// 11. SETTINGS
 // ============================================================
 
 function loadSettingsUI() {
-  document.getElementById('settings-api-url').value = settings.apiUrl || '';
-  document.getElementById('settings-api-key').value = settings.apiKey || '';
-  updateModeButtons(settings.mode);
-  updateThemeButtons(settings.theme);
+  document.getElementById('settings-api-url').value = state.settings.apiUrl || '';
+  document.getElementById('settings-api-key').value = state.settings.apiKey || '';
+  updateModeButtons(state.settings.mode);
+  updateThemeButtons(state.settings.theme);
   populateVoicePicker();
 }
 
 function saveSettingsFromUI() {
-  settings.apiUrl    = document.getElementById('settings-api-url').value.trim();
-  settings.apiKey    = document.getElementById('settings-api-key').value.trim();
-  settings.voiceName = document.getElementById('settings-voice').value;
+  state.settings.apiUrl    = document.getElementById('settings-api-url').value.trim();
+  state.settings.apiKey    = document.getElementById('settings-api-key').value.trim();
+  state.settings.voiceName = document.getElementById('settings-voice').value;
   saveSettings();
+  cues.setVoice(state.settings.voiceName);
   syncPaces();
 }
 
 function populateVoicePicker() {
+  const synth  = window.speechSynthesis;
   const select = document.getElementById('settings-voice');
   if (!select || !synth) return;
-  const voices = synth.getVoices().filter(v => v.lang.startsWith('en')).sort((a,b) => a.name.localeCompare(b.name));
+  const voices  = synth.getVoices().filter(v => v.lang.startsWith('en')).sort((a, b) => a.name.localeCompare(b.name));
   if (!voices.length) return;
-  const current = settings.voiceName;
+  const current = state.settings.voiceName;
   select.innerHTML = '<option value="">Default voice</option>';
   voices.forEach(v => {
-    const opt = document.createElement('option');
-    opt.value = v.name;
+    const opt       = document.createElement('option');
+    opt.value       = v.name;
     opt.textContent = `${v.name} (${v.lang})`;
     if (v.name === current) opt.selected = true;
     select.appendChild(opt);
@@ -973,36 +777,43 @@ function populateVoicePicker() {
 function updateModeButtons(mode) {
   document.querySelectorAll('.seg-btn[data-mode]').forEach(b => b.classList.toggle('active', b.dataset.mode === mode));
 }
+
 function updateThemeButtons(theme) {
   document.querySelectorAll('.theme-swatch').forEach(b => b.classList.toggle('active', b.dataset.theme === theme));
 }
+
 function applyTheme(theme) {
-  settings.theme = theme;
+  state.settings.theme = theme;
   document.documentElement.setAttribute('data-theme', theme);
   updateThemeButtons(theme);
   saveSettings();
 }
+
 function applyMode(mode) {
-  settings.mode = mode;
+  state.settings.mode = mode;
   document.documentElement.setAttribute('data-mode', mode);
   updateModeButtons(mode);
   saveSettings();
 }
 
 async function testApiConnection() {
-  const url = document.getElementById('settings-api-url').value.trim();
-  const key = document.getElementById('settings-api-key').value.trim();
+  const url      = document.getElementById('settings-api-url').value.trim();
+  const key      = document.getElementById('settings-api-key').value.trim();
   const statusEl = document.getElementById('api-status');
-  statusEl.textContent = 'Testing…'; statusEl.className = 'api-status';
+  statusEl.textContent = 'Testing…';
+  statusEl.className   = 'api-status';
   try {
     const res = await fetch(url.replace(/\/$/, '') + '/ping', { headers: { 'X-API-Key': key } });
     if (res.ok) { statusEl.textContent = '✓ Connected'; statusEl.className = 'api-status ok'; }
     else throw new Error(res.status);
-  } catch(e) { statusEl.textContent = `✗ Failed (${e.message})`; statusEl.className = 'api-status error'; }
+  } catch (e) {
+    statusEl.textContent = `✗ Failed (${e.message})`;
+    statusEl.className   = 'api-status error';
+  }
 }
 
 // ============================================================
-// 14. EVENT LISTENERS
+// 12. EVENT LISTENERS
 // ============================================================
 
 document.getElementById('btn-settings').addEventListener('click', () => { loadSettingsUI(); showScreen('settings'); });
@@ -1012,16 +823,15 @@ document.getElementById('btn-templates-back').addEventListener('click', () => sh
 document.getElementById('btn-blank-pace').addEventListener('click', openBlankBuilder);
 
 document.getElementById('btn-builder-back').addEventListener('click', () => {
-  const pace = savePaceFromBuilder();
-  persistPace(pace);
+  persistPace(savePaceFromBuilder());
   showScreen('home');
 });
 
 document.getElementById('btn-delete-pace').addEventListener('click', async () => {
-  if (!editingPace) return;
-  if (confirm(`Delete "${editingPace.name || 'this pace'}"?`)) {
-    const id = editingPace.id;
-    editingPace = null;
+  if (!state.editingPace) return;
+  if (confirm(`Delete "${state.editingPace.name || 'this pace'}"?`)) {
+    const id = state.editingPace.id;
+    state.editingPace = null;
     showScreen('home');
     await deletePace(id);
   }
@@ -1029,24 +839,24 @@ document.getElementById('btn-delete-pace').addEventListener('click', async () =>
 
 document.querySelectorAll('#countdown-opts .countdown-opt').forEach(btn => {
   btn.addEventListener('click', () => {
-    if (!editingPace) return;
-    editingPace.transitionCountdown = btn.dataset.value;
+    if (!state.editingPace) return;
+    state.editingPace.transitionCountdown = btn.dataset.value;
     syncCountdownUI();
   });
 });
 
 document.getElementById('btn-add-step-footer').addEventListener('click', () => {
   syncBuilderState();
-  editingPace.items.push(makeBlankStep());
+  state.editingPace.items.push(makeBlankStep());
   renderBuilder();
-  document.getElementById('builder-content').lastElementChild?.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  document.getElementById('builder-content').lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 });
 
 document.getElementById('btn-add-group-footer').addEventListener('click', () => {
   syncBuilderState();
-  editingPace.items.push(makeBlankGroup());
+  state.editingPace.items.push(makeBlankGroup());
   renderBuilder();
-  document.getElementById('builder-content').lastElementChild?.scrollIntoView({ behavior:'smooth', block:'nearest' });
+  document.getElementById('builder-content').lastElementChild?.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
 });
 
 document.getElementById('btn-start-pace').addEventListener('click', () => {
@@ -1058,9 +868,9 @@ document.getElementById('btn-start-pace').addEventListener('click', () => {
 document.getElementById('btn-end-pace').addEventListener('click', () => {
   if (confirm('End this pace?')) { endPace(); showScreen('home'); }
 });
-document.getElementById('btn-manual-next').addEventListener('click', advanceManualStep);
+document.getElementById('btn-manual-next').addEventListener('click', () => timer.advanceManual());
 document.getElementById('btn-pause-resume').addEventListener('click', () => {
-  if (isPaused) resumeTimer(); else pauseTimer();
+  if (timer.isPaused) resumeTimer(); else pauseTimer();
 });
 document.getElementById('btn-restart').addEventListener('click', () => {
   if (confirm('Restart from the beginning?')) restartPaceTimer();
@@ -1068,19 +878,28 @@ document.getElementById('btn-restart').addEventListener('click', () => {
 
 document.getElementById('btn-complete-home').addEventListener('click', () => showScreen('home'));
 document.getElementById('btn-do-again').addEventListener('click', () => {
-  if (activePace) startPace(activePace); else showScreen('home');
+  if (state.activePace) startPace(state.activePace); else showScreen('home');
 });
 
 document.getElementById('btn-settings-back').addEventListener('click', () => showScreen('home'));
 document.getElementById('btn-save-settings').addEventListener('click', () => { saveSettingsFromUI(); showScreen('home'); });
 document.getElementById('btn-test-api').addEventListener('click', testApiConnection);
+
 document.getElementById('btn-test-voice').addEventListener('click', () => {
+  // Bypass the scheduler for preview — lets us test without affecting timer state
+  const synth = window.speechSynthesis;
+  if (!synth) return;
   const name = document.getElementById('settings-voice').value;
-  const prev = settings.voiceName;
-  settings.voiceName = name;
-  speak('Step one. Begin! Five, four, three, two, one. Pace complete.');
-  settings.voiceName = prev;
+  synth.cancel();
+  const u = new SpeechSynthesisUtterance('Step one. Begin! Five, four, three, two, one. Pace complete.');
+  u.rate = 1.1; u.pitch = 1.0; u.volume = 1.0;
+  if (name) {
+    const voice = synth.getVoices().find(v => v.name === name);
+    if (voice) u.voice = voice;
+  }
+  synth.speak(u);
 });
+
 document.getElementById('mode-toggle').addEventListener('click', e => {
   const btn = e.target.closest('.seg-btn[data-mode]');
   if (btn) applyMode(btn.dataset.mode);
@@ -1091,16 +910,22 @@ document.getElementById('theme-grid').addEventListener('click', e => {
 });
 
 // ============================================================
-// 15. INIT
+// 13. INIT
 // ============================================================
+
+if (window.speechSynthesis) {
+  window.speechSynthesis.onvoiceschanged = () => populateVoicePicker();
+  setTimeout(populateVoicePicker, 100);
+}
 
 async function init() {
   loadSettings();
-  applyTheme(settings.theme);
-  applyMode(settings.mode);
-  paces = loadLocalPaces();
+  applyTheme(state.settings.theme);
+  applyMode(state.settings.mode);
+  state.paces = loadLocalPaces();
   renderPaceList();
-  await loadTemplates();  // load templates.json before anything needs them
+  await loadTemplates();
+  cues.setVoice(state.settings.voiceName);
   syncPaces();
   if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
