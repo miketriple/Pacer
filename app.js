@@ -15,6 +15,10 @@ import {
 } from './pace.js';
 import { TimerEngine  } from './timer.js';
 import { CueScheduler } from './cues.js';
+import {
+  createNativeSpeakFn, stopNativeTts,
+  startForegroundService, stopForegroundService,
+} from './native.js';
 
 // ============================================================
 // 1. TEMPLATE LOADING
@@ -655,6 +659,9 @@ function startPace(pace) {
   buildOverallDots(flat.length);
   showScreen('timer');
   timer.start(flat);
+  if (window.Capacitor?.isNativePlatform()) {
+    startForegroundService(pace.name || 'Pacer').catch(console.warn);
+  }
 }
 
 function updateTimerDisplay(tickData = null) {
@@ -754,6 +761,9 @@ function endPace() {
   timer.stop();
   cues.stop();
   state.activePace = null;
+  if (window.Capacitor?.isNativePlatform()) {
+    stopForegroundService().catch(console.warn);
+  }
 }
 
 // ============================================================
@@ -938,6 +948,12 @@ if (window.speechSynthesis) {
   setTimeout(populateVoicePicker, 100);
 }
 
+/** Wire up native TTS and Foreground Service when running inside Capacitor. */
+async function initPlatform() {
+  if (!window.Capacitor?.isNativePlatform()) return;
+  cues.setSpeakFn(createNativeSpeakFn(), stopNativeTts);
+}
+
 async function init() {
   loadSettings();
   applyTheme(state.settings.theme);
@@ -945,9 +961,13 @@ async function init() {
   state.paces = loadLocalPaces();
   renderPaceList();
   await loadTemplates();
+  await initPlatform();
   cues.setVoice(state.settings.voiceName);
   syncPaces();
-  if ('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(() => {});
+  // Skip Service Worker inside Capacitor — it uses its own asset serving layer.
+  if ('serviceWorker' in navigator && !window.Capacitor?.isNativePlatform()) {
+    navigator.serviceWorker.register('sw.js').catch(() => {});
+  }
 }
 
 init();

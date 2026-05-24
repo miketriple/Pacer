@@ -11,12 +11,27 @@ export class CueScheduler {
     this._busy       = false;
     this._fired      = new Set();   // cue keys already spoken this segment
     this._currentSeg = null;
+    this._speakFn    = null;        // injectable native TTS function (text) => Promise<void>
+    this._stopFn     = null;        // injectable native TTS stop function () => Promise<void>
   }
 
   // ── Configuration ────────────────────────────────────────────
 
   setVoice(name) {
     this._voiceName = name || '';
+  }
+
+  /**
+   * Inject a native speak function.
+   * When set, the scheduler uses fn(text) instead of speechSynthesis.
+   * fn must return a Promise that resolves when speech is complete.
+   * Pass null to revert to web speechSynthesis.
+   * @param {((text: string) => Promise<void>) | null} fn
+   * @param {(() => Promise<void>) | null} stopFn  Called to cancel in-progress speech.
+   */
+  setSpeakFn(fn, stopFn = null) {
+    this._speakFn = fn ?? null;
+    this._stopFn  = stopFn ?? null;
   }
 
   // ── Segment lifecycle ────────────────────────────────────────
@@ -75,7 +90,11 @@ export class CueScheduler {
 
   /** Cancel everything and silence the synthesiser. */
   stop() {
-    window.speechSynthesis?.cancel();
+    if (this._stopFn) {
+      this._stopFn().catch(() => {});
+    } else {
+      window.speechSynthesis?.cancel();
+    }
     this._queue      = [];
     this._busy       = false;
     this._fired.clear();
@@ -89,7 +108,11 @@ export class CueScheduler {
 
     if (priority === 'high') {
       // Cancel whatever is speaking now, drop queued normal-priority items
-      window.speechSynthesis?.cancel();
+      if (this._stopFn) {
+        this._stopFn().catch(() => {});
+      } else {
+        window.speechSynthesis?.cancel();
+      }
       this._busy  = false;
       this._queue = this._queue.filter(i => i.priority === 'high');
       this._queue.unshift({ text, priority });
@@ -101,13 +124,26 @@ export class CueScheduler {
   }
 
   _flush() {
-    const synth = window.speechSynthesis;
-    if (!synth || this._busy || !this._queue.length) return;
+    if (this._busy || !this._queue.length) return;
 
     const { text } = this._queue.shift();
-    const u        = new SpeechSynthesisUtterance(text);
-    u.rate  = 1.1;
-    u.pitch = 1.0;
+    this._busy = true;
+
+    if (this._speakFn) {
+      // Native TTS path — chains via Promise resolution
+      this._speakFn(text)
+        .then(()  => { this._busy = false; this._flush(); })
+        .catch(() => { this._busy = false; this._flush(); });
+      return;
+    }
+
+    // Web Speech API path
+    const synth = window.speechSynthesis;
+    if (!synth) { this._busy = false; return; }
+
+    const u  = new SpeechSynthesisUtterance(text);
+    u.rate   = 1.1;
+    u.pitch  = 1.0;
     u.volume = 1.0;
 
     if (this._voiceName) {
@@ -115,7 +151,6 @@ export class CueScheduler {
       if (voice) u.voice = voice;
     }
 
-    this._busy = true;
     u.onend   = () => { this._busy = false; this._flush(); };
     u.onerror = () => { this._busy = false; this._flush(); };
     synth.speak(u);

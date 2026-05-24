@@ -1,0 +1,10 @@
+{
+  "appId": "com.the12414.pacer",
+  "appName": "Pacer",
+  "webDir": "www",
+  "plugins": {
+    "TextToSpeech": {
+      "iosCategory": "playback"
+    }
+  }
+}

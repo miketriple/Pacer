@@ -3,7 +3,7 @@
    Service worker: cache-first for app shell, network for API.
    ============================================================ */
 
-const CACHE = 'pacer-v4';
+const CACHE = 'pacer-v5';
 const SHELL = [
   '/',
   '/index.html',
@@ -13,6 +13,7 @@ const SHELL = [
   '/pace.js',
   '/timer.js',
   '/cues.js',
+  '/native.js',
   '/manifest.json',
   '/templates.json',
   'https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Barlow+Condensed:wght@300;400;500;600;700&family=Barlow:wght@300;400;500&display=swap',
