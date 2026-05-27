@@ -16,8 +16,9 @@ import {
 import { TimerEngine  } from './timer.js';
 import { CueScheduler } from './cues.js';
 import {
-  createNativeSpeakFn, stopNativeTts,
-  startForegroundService, stopForegroundService,
+  buildCueSchedule,
+  startNativeTimerWithSchedule,
+  stopNativeTimer,
 } from './native.js';
 
 // ============================================================
@@ -51,6 +52,10 @@ const state = {
 };
 
 const pendingDeletes = new Set();
+
+// Holds the pre-computed native cue schedule so pause/resume can offset it correctly.
+// null when no pace is running or the pace contains manual steps.
+let nativeCueSchedule = null;
 
 // ============================================================
 // 3. SERVICES
@@ -659,8 +664,18 @@ function startPace(pace) {
   buildOverallDots(flat.length);
   showScreen('timer');
   timer.start(flat);
+
   if (window.Capacitor?.isNativePlatform()) {
-    startForegroundService(pace.name || 'Pacer').catch(console.warn);
+    // Native timer handles all audio — but only for fully-timed paces.
+    // Manual steps require screen interaction so locked-screen audio isn't applicable.
+    const hasManualSteps = flat.some(s => s.duration === 0);
+    if (!hasManualSteps) {
+      const tc         = pace.transitionCountdown ?? '5';
+      nativeCueSchedule = buildCueSchedule(flat, tc);
+      startNativeTimerWithSchedule(nativeCueSchedule, pace.name || 'Pacer').catch(console.warn);
+    } else {
+      nativeCueSchedule = null;
+    }
   }
 }
 
@@ -742,12 +757,23 @@ function pauseTimer() {
   timer.pause();
   document.getElementById('btn-pause-resume').textContent = 'Resume';
   document.getElementById('timer-clock').classList.add('paused');
+  if (window.Capacitor?.isNativePlatform()) {
+    stopNativeTimer().catch(console.warn);
+  }
 }
 
 function resumeTimer() {
   timer.resume();
   document.getElementById('btn-pause-resume').textContent = 'Pause';
   document.getElementById('timer-clock').classList.remove('paused');
+  if (window.Capacitor?.isNativePlatform() && nativeCueSchedule) {
+    // Rebuild the remaining schedule by shifting all future cues by elapsed time.
+    const elapsedMs  = timer.totalElapsedSeconds * 1000;
+    const remaining  = nativeCueSchedule
+      .filter(c => c.delayMs > elapsedMs)
+      .map(c => ({ ...c, delayMs: c.delayMs - elapsedMs }));
+    startNativeTimerWithSchedule(remaining, state.activePace?.name || 'Pacer').catch(console.warn);
+  }
 }
 
 function restartPaceTimer() {
@@ -755,14 +781,26 @@ function restartPaceTimer() {
   timer.restart();
   document.getElementById('btn-pause-resume').textContent = 'Pause';
   document.getElementById('timer-clock').classList.remove('paused');
+  if (window.Capacitor?.isNativePlatform() && state.activePace) {
+    const flat           = flattenItems(state.activePace.items);
+    const hasManualSteps = flat.some(s => s.duration === 0);
+    if (!hasManualSteps) {
+      const tc          = state.activePace.transitionCountdown ?? '5';
+      nativeCueSchedule = buildCueSchedule(flat, tc);
+      stopNativeTimer()
+        .then(() => startNativeTimerWithSchedule(nativeCueSchedule, state.activePace?.name || 'Pacer'))
+        .catch(console.warn);
+    }
+  }
 }
 
 function endPace() {
   timer.stop();
   cues.stop();
-  state.activePace = null;
+  state.activePace  = null;
+  nativeCueSchedule = null;
   if (window.Capacitor?.isNativePlatform()) {
-    stopForegroundService().catch(console.warn);
+    stopNativeTimer().catch(console.warn);
   }
 }
 
@@ -948,10 +986,10 @@ if (window.speechSynthesis) {
   setTimeout(populateVoicePicker, 100);
 }
 
-/** Wire up native TTS and Foreground Service when running inside Capacitor. */
+/** Silence the web CueScheduler on native — PacerTimerService handles all audio. */
 async function initPlatform() {
   if (!window.Capacitor?.isNativePlatform()) return;
-  cues.setSpeakFn(createNativeSpeakFn(), stopNativeTts);
+  cues.setSpeakFn(() => Promise.resolve());
 }
 
 async function init() {
