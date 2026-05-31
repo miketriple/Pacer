@@ -989,6 +989,10 @@ if (window.speechSynthesis) {
 /** Silence the web CueScheduler on native — PacerTimerService handles all audio. */
 async function initPlatform() {
   if (!window.Capacitor?.isNativePlatform()) return;
+  if (!window.Capacitor?.Plugins?.PacerTimer) {
+    console.warn('PacerTimer plugin not found — falling back to web TTS');
+    return;
+  }
   cues.setSpeakFn(() => Promise.resolve());
 }
 
