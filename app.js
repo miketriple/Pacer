@@ -16,7 +16,7 @@ import {
 import { TimerEngine  } from './timer.js';
 import { CueScheduler } from './cues.js';
 import {
-  buildCueSchedule,
+  buildNativeChunk,
   startNativeTimerWithSchedule,
   stopNativeTimer,
 } from './native.js';
@@ -53,9 +53,14 @@ const state = {
 
 const pendingDeletes = new Set();
 
-// Holds the pre-computed native cue schedule so pause/resume can offset it correctly.
-// null when no pace is running or the pace contains manual steps.
+// Holds the pre-computed native cue schedule for the current timed chunk.
+// null when no native timer is running.
 let nativeCueSchedule = null;
+// Wall-clock ms at which the current native timer chunk "effectively" started
+// (shifted forward by any pause durations so Date.now()-nativeTimerStartMs = timer elapsed).
+let nativeTimerStartMs = 0;
+// Wall-clock ms when the last pause began; 0 when not paused.
+let _nativePausedAt = 0;
 
 // ============================================================
 // 3. SERVICES
@@ -74,6 +79,26 @@ const timer = new TimerEngine({
     updateTimerDisplay();                                          // sets width to 0%
     requestAnimationFrame(() => { fill.style.transition = ''; }); // restore
     animatePhaseTransition();
+
+    // Native timer: when advancing from a manual step into a timed step,
+    // restart a new native timer chunk for the remaining timed segments.
+    // (Manual steps require the screen to be visible, so no native audio is
+    // needed during them — we restart only when returning to timed steps.)
+    if (window.Capacitor?.isNativePlatform() && state.activePace && idx > 0) {
+      const flat    = timer.flatSegments;
+      const prevSeg = flat[idx - 1];
+      if ((prevSeg?.duration || 0) === 0 && (seg.duration || 0) > 0) {
+        const tc          = state.activePace.transitionCountdown ?? '5';
+        nativeCueSchedule = buildNativeChunk(flat, idx, tc);
+        nativeTimerStartMs = Date.now();
+        _nativePausedAt    = 0;
+        console.log('[Pacer] restarting native chunk at seg', idx,
+          '— cues:', nativeCueSchedule.length);
+        stopNativeTimer().then(() =>
+          startNativeTimerWithSchedule(nativeCueSchedule, state.activePace?.name || 'Pacer')
+        );
+      }
+    }
   },
 
   onTick(tickData) {
@@ -666,15 +691,17 @@ function startPace(pace) {
   timer.start(flat);
 
   if (window.Capacitor?.isNativePlatform()) {
-    // Native timer handles all audio — but only for fully-timed paces.
-    // Manual steps require screen interaction so locked-screen audio isn't applicable.
-    const hasManualSteps = flat.some(s => s.duration === 0);
-    if (!hasManualSteps) {
-      const tc         = pace.transitionCountdown ?? '5';
-      nativeCueSchedule = buildCueSchedule(flat, tc);
+    // Build a cue schedule for the first contiguous timed chunk (stops before the
+    // first manual step). The onSegmentStart handler restarts a new chunk each time
+    // the user taps through a manual step back into timed steps.
+    const tc          = pace.transitionCountdown ?? '5';
+    nativeCueSchedule = buildNativeChunk(flat, 0, tc);
+    nativeTimerStartMs = Date.now();
+    _nativePausedAt    = 0;
+    console.log('[Pacer] starting native timer — segments:', flat.length,
+      ', first chunk cues:', nativeCueSchedule.length);
+    if (nativeCueSchedule.length > 0) {
       startNativeTimerWithSchedule(nativeCueSchedule, pace.name || 'Pacer');
-    } else {
-      nativeCueSchedule = null;
     }
   }
 }
@@ -758,6 +785,7 @@ function pauseTimer() {
   document.getElementById('btn-pause-resume').textContent = 'Resume';
   document.getElementById('timer-clock').classList.add('paused');
   if (window.Capacitor?.isNativePlatform()) {
+    _nativePausedAt = Date.now();   // record when pause began for epoch adjustment on resume
     stopNativeTimer();
   }
 }
@@ -767,11 +795,19 @@ function resumeTimer() {
   document.getElementById('btn-pause-resume').textContent = 'Pause';
   document.getElementById('timer-clock').classList.remove('paused');
   if (window.Capacitor?.isNativePlatform() && nativeCueSchedule) {
-    // Rebuild the remaining schedule by shifting all future cues by elapsed time.
-    const elapsedMs  = timer.totalElapsedSeconds * 1000;
-    const remaining  = nativeCueSchedule
+    // Shift nativeTimerStartMs forward by the pause duration so that
+    // Date.now() - nativeTimerStartMs continues to equal "timer-elapsed ms"
+    // even after any number of pauses.
+    if (_nativePausedAt > 0) {
+      nativeTimerStartMs += Date.now() - _nativePausedAt;
+      _nativePausedAt = 0;
+    }
+    const elapsedMs = Date.now() - nativeTimerStartMs;
+    // Re-start the service with only the cues that haven't fired yet, shifted to "from now".
+    const remaining = nativeCueSchedule
       .filter(c => c.delayMs > elapsedMs)
       .map(c => ({ ...c, delayMs: c.delayMs - elapsedMs }));
+    nativeTimerStartMs = Date.now();   // reset — remaining cues are now relative to now
     startNativeTimerWithSchedule(remaining, state.activePace?.name || 'Pacer');
   }
 }
@@ -782,23 +818,26 @@ function restartPaceTimer() {
   document.getElementById('btn-pause-resume').textContent = 'Pause';
   document.getElementById('timer-clock').classList.remove('paused');
   if (window.Capacitor?.isNativePlatform() && state.activePace) {
-    const flat           = flattenItems(state.activePace.items);
-    const hasManualSteps = flat.some(s => s.duration === 0);
-    if (!hasManualSteps) {
-      const tc          = state.activePace.transitionCountdown ?? '5';
-      nativeCueSchedule = buildCueSchedule(flat, tc);
-      stopNativeTimer().then(() =>
-        startNativeTimerWithSchedule(nativeCueSchedule, state.activePace?.name || 'Pacer')
-      );
-    }
+    const flat        = flattenItems(state.activePace.items);
+    const tc          = state.activePace.transitionCountdown ?? '5';
+    nativeCueSchedule = buildNativeChunk(flat, 0, tc);
+    nativeTimerStartMs = Date.now();
+    _nativePausedAt    = 0;
+    stopNativeTimer().then(() => {
+      if (nativeCueSchedule.length > 0) {
+        startNativeTimerWithSchedule(nativeCueSchedule, state.activePace?.name || 'Pacer');
+      }
+    });
   }
 }
 
 function endPace() {
   timer.stop();
   cues.stop();
-  state.activePace  = null;
-  nativeCueSchedule = null;
+  state.activePace   = null;
+  nativeCueSchedule  = null;
+  nativeTimerStartMs = 0;
+  _nativePausedAt    = 0;
   if (window.Capacitor?.isNativePlatform()) {
     stopNativeTimer();
   }

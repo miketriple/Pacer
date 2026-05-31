@@ -8,19 +8,22 @@
 /**
  * Pre-compute a flat cue schedule from flatSegments.
  * Returns [{delayMs, text}] sorted by delayMs, ready to pass to
- * startNativeTimerWithSchedule(). All timing is relative to pace start.
+ * startNativeTimerWithSchedule(). All timing is relative to the start of
+ * the passed segments (i.e. delayMs=0 means "fire immediately").
  *
  * Manual ("On Tap") steps are skipped — their duration is unknown in advance
  * and they require the user to look at the screen anyway.
  *
- * @param {object[]} flatSegments        - from flattenItems()
+ * @param {object[]} flatSegments        - from flattenItems() (or a slice thereof)
  * @param {string}   transitionCountdown - '3', '5', or 'silent'
+ * @param {object}   [options]
+ * @param {boolean}  [options.addCompletionCue=true] - append "Pace complete" after last step
  * @returns {{ delayMs: number, text: string }[]}
  */
-export function buildCueSchedule(flatSegments, transitionCountdown) {
+export function buildCueSchedule(flatSegments, transitionCountdown, { addCompletionCue = true } = {}) {
   const cues   = [];
   const thresh = transitionCountdown === 'silent' ? 0 : (Number(transitionCountdown) || 5);
-  let   offset = 0;   // running offset in milliseconds from pace start
+  let   offset = 0;   // running offset in milliseconds from chunk start
 
   for (const seg of flatSegments) {
     const duration = seg.duration || 0;
@@ -48,10 +51,33 @@ export function buildCueSchedule(flatSegments, transitionCountdown) {
     offset += duration * 1000;
   }
 
-  // Completion cue fires 500 ms after the final step ends
-  cues.push({ delayMs: offset + 500, text: 'Pace complete. Well done!' });
+  if (addCompletionCue) {
+    // Completion cue fires 500 ms after the final step ends
+    cues.push({ delayMs: offset + 500, text: 'Pace complete. Well done!' });
+  }
 
   return cues.sort((a, b) => a.delayMs - b.delayMs);
+}
+
+/**
+ * Build the native cue schedule for the first contiguous run of timed steps
+ * starting at startIdx in flatSegments.
+ *
+ * For paces with manual ("On Tap") steps, the schedule stops at the first
+ * manual step and the completion cue is suppressed — the caller restarts a
+ * new chunk when the user taps through each manual step.
+ *
+ * @param {object[]} flatSegments        - full flat segment list
+ * @param {number}   startIdx            - index to begin from (0 for full pace)
+ * @param {string}   transitionCountdown - '3', '5', or 'silent'
+ * @returns {{ delayMs: number, text: string }[]}
+ */
+export function buildNativeChunk(flatSegments, startIdx, transitionCountdown) {
+  const remaining       = flatSegments.slice(startIdx);
+  const nextManualIdx   = remaining.findIndex(s => (s.duration || 0) === 0);
+  const isFinalChunk    = nextManualIdx === -1;   // no more manual steps ahead
+  const chunk           = isFinalChunk ? remaining : remaining.slice(0, nextManualIdx);
+  return buildCueSchedule(chunk, transitionCountdown, { addCompletionCue: isFinalChunk });
 }
 
 /**
