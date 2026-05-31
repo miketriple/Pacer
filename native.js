@@ -63,18 +63,37 @@ export function buildCueSchedule(flatSegments, transitionCountdown) {
  * @param {string} paceName  Shown in the foreground notification.
  * @returns {Promise<void>}
  */
-export function startNativeTimerWithSchedule(schedule, paceName) {
-  return window.Capacitor?.Plugins?.PacerTimer?.start({
-    cues:     schedule,
-    paceName: paceName || 'Pacer',
-  }) ?? Promise.resolve();
+export async function startNativeTimerWithSchedule(schedule, paceName) {
+  const plugin = window.Capacitor?.Plugins?.PacerTimer;
+  if (!plugin) {
+    console.warn('[PacerTimer] Plugin not available — start skipped');
+    return;
+  }
+  console.log('[PacerTimer] start →', schedule.length, 'cues, pace:', paceName);
+  try {
+    const result = await plugin.start({
+      cues:     schedule,
+      paceName: paceName || 'Pacer',
+    });
+    console.log('[PacerTimer] start ✓', result);
+  } catch (err) {
+    // Logged here — don't rethrow so callers need no .catch()
+    console.error('[PacerTimer] start ✗', err?.message ?? err);
+  }
 }
 
 /**
  * Stop PacerTimerService and cancel all pending cues.
  * @returns {Promise<void>}
  */
-export function stopNativeTimer() {
-  return window.Capacitor?.Plugins?.PacerTimer?.stop?.()
-    ?? Promise.resolve();
+export async function stopNativeTimer() {
+  const plugin = window.Capacitor?.Plugins?.PacerTimer;
+  if (!plugin) return;
+  console.log('[PacerTimer] stop →');
+  try {
+    await plugin.stop();
+    console.log('[PacerTimer] stop ✓');
+  } catch (err) {
+    console.error('[PacerTimer] stop ✗', err?.message ?? err);
+  }
 }

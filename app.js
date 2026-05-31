@@ -672,7 +672,7 @@ function startPace(pace) {
     if (!hasManualSteps) {
       const tc         = pace.transitionCountdown ?? '5';
       nativeCueSchedule = buildCueSchedule(flat, tc);
-      startNativeTimerWithSchedule(nativeCueSchedule, pace.name || 'Pacer').catch(console.warn);
+      startNativeTimerWithSchedule(nativeCueSchedule, pace.name || 'Pacer');
     } else {
       nativeCueSchedule = null;
     }
@@ -758,7 +758,7 @@ function pauseTimer() {
   document.getElementById('btn-pause-resume').textContent = 'Resume';
   document.getElementById('timer-clock').classList.add('paused');
   if (window.Capacitor?.isNativePlatform()) {
-    stopNativeTimer().catch(console.warn);
+    stopNativeTimer();
   }
 }
 
@@ -772,7 +772,7 @@ function resumeTimer() {
     const remaining  = nativeCueSchedule
       .filter(c => c.delayMs > elapsedMs)
       .map(c => ({ ...c, delayMs: c.delayMs - elapsedMs }));
-    startNativeTimerWithSchedule(remaining, state.activePace?.name || 'Pacer').catch(console.warn);
+    startNativeTimerWithSchedule(remaining, state.activePace?.name || 'Pacer');
   }
 }
 
@@ -787,9 +787,9 @@ function restartPaceTimer() {
     if (!hasManualSteps) {
       const tc          = state.activePace.transitionCountdown ?? '5';
       nativeCueSchedule = buildCueSchedule(flat, tc);
-      stopNativeTimer()
-        .then(() => startNativeTimerWithSchedule(nativeCueSchedule, state.activePace?.name || 'Pacer'))
-        .catch(console.warn);
+      stopNativeTimer().then(() =>
+        startNativeTimerWithSchedule(nativeCueSchedule, state.activePace?.name || 'Pacer')
+      );
     }
   }
 }
@@ -800,7 +800,7 @@ function endPace() {
   state.activePace  = null;
   nativeCueSchedule = null;
   if (window.Capacitor?.isNativePlatform()) {
-    stopNativeTimer().catch(console.warn);
+    stopNativeTimer();
   }
 }
 
