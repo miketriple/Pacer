@@ -815,10 +815,19 @@ function animatePhaseTransition() {
  * Set the play/pause button to show either ⏸ (currently playing → tap to pause)
  * or ▶ (currently paused → tap to resume), with matching aria-label and tooltip.
  */
+// Inline SVG icons — Unicode pause/play glyphs render as colored emoji on
+// some Android system fonts no matter what variation selector we use, so we
+// draw the shapes ourselves to guarantee a flat monochrome look.
+const _PAUSE_SVG = '<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">'
+  + '<rect x="6" y="4" width="4" height="16" rx="1.5"/>'
+  + '<rect x="14" y="4" width="4" height="16" rx="1.5"/></svg>';
+const _PLAY_SVG  = '<svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true">'
+  + '<path d="M7 4 L20 12 L7 20 Z"/></svg>';
+
 function _setPauseBtnIcon(isPaused) {
   const btn = document.getElementById('btn-pause-resume');
   const label = isPaused ? 'Resume' : 'Pause';
-  btn.textContent = isPaused ? '▶' : '⏸';
+  btn.innerHTML = isPaused ? _PLAY_SVG : _PAUSE_SVG;
   btn.setAttribute('aria-label', label);
   btn.setAttribute('title',      label);
 }

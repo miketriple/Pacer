@@ -118,11 +118,11 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
 .btn-sm { font-size:14px; padding:10px 14px; flex:0 0 auto; }
 .btn-large { font-size:18px; padding:16px 32px; flex:2; }
 /* Square-ish icon button used in the media-style timer controls
-   (prev / restart / pause-play / next). */
-.btn-icon { flex:0 0 auto; min-width:52px; padding:13px 0; font-size:20px; line-height:1; }
-/* The restart glyph (↺) renders smaller than the media-control glyphs in most
-   Android fonts; bump it up so all four buttons read at the same visual weight. */
-#btn-restart-step { font-size:26px; }
+   (prev / restart / pause-play / next).  Hosts inline SVG icons. */
+.btn-icon { flex:0 0 auto; min-width:52px; padding:13px 0; line-height:1; }
+/* Inline SVG icon inside an icon button.  Inherits the button's text colour
+   so the icons re-tint correctly under theme changes. */
+.icon-svg { width:22px; height:22px; fill:currentColor; vertical-align:middle; display:inline-block; }
 .builder-footer { flex-wrap:nowrap; }
 
 /* ============================================================
