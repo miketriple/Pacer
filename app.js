@@ -767,12 +767,10 @@ function updateTimerDisplay(tickData = null) {
     clockEl.style.fontSize = 'clamp(28px, 8vw, 42px)';
     clockEl.classList.remove('paused');
     if (manualBtn) manualBtn.style.display = 'flex';
-    if (pauseBtn)  pauseBtn.style.display  = 'none';
     progressEl.style.width = '0%';
   } else {
     clockEl.style.fontSize = '';
     if (manualBtn) manualBtn.style.display = 'none';
-    if (pauseBtn)  pauseBtn.style.display  = '';
     // Ceil keeps the clock at "N" for the full Nth second — changes at clean
     // whole-second boundaries rather than at 0.5-second marks (Math.round).
     // The bar uses raw float elapsed so it moves smoothly and independently.
