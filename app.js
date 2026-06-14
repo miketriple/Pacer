@@ -45,7 +45,6 @@ async function loadTemplates() {
 const state = {
   paces:       [],
   editingPace: null,
-  activePace:  null,
   settings: {
     theme: 'venom', mode: 'system', apiUrl: '', apiKey: '', voiceName: '',
   },
@@ -58,36 +57,47 @@ const pendingDeletes = new Set();
 // (so an accidental tap mid-rearrange can't start a pace).
 let reorderMode = false;
 
-// Holds the pre-computed native cue schedule for the current timed chunk.
-// null when no native timer is running.
-let nativeCueSchedule = null;
-// Wall-clock ms at which the current native timer chunk "effectively" started
-// (shifted forward by any pause durations so Date.now()-nativeTimerStartMs = timer elapsed).
-let nativeTimerStartMs = 0;
-// Wall-clock ms when the last pause began; 0 when not paused.
-let _nativePausedAt = 0;
-// Set true just before a user-initiated jump (restart-step / prev-step / next-step)
-// so onSegmentStart knows to rebuild the native cue chunk from the new position
-// rather than relying on the pre-scheduled timeline. Cleared at the end of onSegmentStart.
-let _userJumping = false;
-
 // ============================================================
-// 3. SERVICES
+// 3. RUNTIME — per-pace running state
 // ============================================================
 
-const cues  = new CueScheduler();
+/**
+ * Per-pace runtime state — everything that exists only while a pace is running.
+ * `state` holds persistent app data (paces list, settings); `runtime` holds the
+ * ephemeral "a pace is currently active" context.  Keeping these separate makes
+ * lifecycle reasoning clearer (one place to reset on endPace), and would be
+ * the natural attachment point if multi-pace support were ever added
+ * (an array of runtimes instead of one).
+ *
+ *   pace          — the active Pace object (or null when nothing is running)
+ *   timer         — TimerEngine instance (long-lived; created once at startup)
+ *   cues          — CueScheduler instance (long-lived; created once at startup)
+ *   cueSchedule   — pre-computed [{delayMs, text}] for the current native chunk
+ *   chunkStartMs  — wall-clock anchor for shifting cues on pause/resume
+ *   pausedAtMs    — wall-clock ms when pause began; 0 when not paused
+ *   isUserJumping — true mid-jump so onSegmentStart rebuilds the native chunk
+ */
+const runtime = {
+  pace:          null,
+  timer:         null,   // set just below, after CueScheduler exists
+  cues:          new CueScheduler(),
+  cueSchedule:   null,
+  chunkStartMs:  0,
+  pausedAtMs:    0,
+  isUserJumping: false,
+};
 
 // On Android, all TTS goes through PacerTimerService (native Android TTS).
 // Injecting no-ops prevents the WebView's speechSynthesis from being called,
 // which would otherwise cancel native TTS cues at every segment transition.
 if (window.Capacitor?.isNativePlatform()) {
-  cues.setSpeakFn(() => Promise.resolve(), () => Promise.resolve());
+  runtime.cues.setSpeakFn(() => Promise.resolve(), () => Promise.resolve());
 }
 
-const timer = new TimerEngine({
+runtime.timer = new TimerEngine({
 
   onSegmentStart(seg, idx) {
-    cues.arm(seg);
+    runtime.cues.arm(seg);
     // Snap bar to 0% without transition so it doesn't animate back from 100%.
     // Restore the transition one frame later so the new segment's ticks animate normally.
     const fill = document.getElementById('timer-progress-fill');
@@ -98,8 +108,8 @@ const timer = new TimerEngine({
 
     // Native timer: route all audio through Android TTS because Web Speech API
     // is unreliable in the Capacitor WebView.
-    if (window.Capacitor?.isNativePlatform() && state.activePace) {
-      const flat     = timer.flatSegments;
+    if (window.Capacitor?.isNativePlatform() && runtime.pace) {
+      const flat     = runtime.timer.flatSegments;
       const prevSeg  = flat[idx - 1];
       const isManual = (seg.duration || 0) === 0;
 
@@ -113,43 +123,43 @@ const timer = new TimerEngine({
           ? [{ delayMs: 0, text: openingText }, ...extraCues]
           : extraCues;
         if (cueList.length > 0) {
-          nativeCueSchedule  = cueList;
-          nativeTimerStartMs = Date.now();
-          _nativePausedAt    = 0;
+          runtime.cueSchedule  = cueList;
+          runtime.chunkStartMs = Date.now();
+          runtime.pausedAtMs   = 0;
           console.log('[Pacer] manual step cue:', openingText);
-          startNativeTimerWithSchedule(cueList, state.activePace?.name || 'Pacer');
+          startNativeTimerWithSchedule(cueList, runtime.pace?.name || 'Pacer');
         } else {
-          nativeCueSchedule = null;
+          runtime.cueSchedule = null;
         }
-      } else if (_userJumping || (idx > 0 && (prevSeg?.duration || 0) === 0)) {
+      } else if (runtime.isUserJumping || (idx > 0 && (prevSeg?.duration || 0) === 0)) {
         // User jumped to a timed step (or naturally advanced from a manual step)
         // — rebuild the native chunk from this position. The pre-scheduled timeline
         // from the previous chunk would now be wrong.
-        const tc          = state.activePace.transitionCountdown ?? '5';
-        nativeCueSchedule = buildNativeChunk(flat, idx, tc);
-        nativeTimerStartMs = Date.now();
-        _nativePausedAt    = 0;
+        const tc            = runtime.pace.transitionCountdown ?? '5';
+        runtime.cueSchedule  = buildNativeChunk(flat, idx, tc);
+        runtime.chunkStartMs = Date.now();
+        runtime.pausedAtMs   = 0;
         console.log('[Pacer] rebuilding native chunk at seg', idx,
-          '— cues:', nativeCueSchedule.length, _userJumping ? '(user jump)' : '(after manual)');
+          '— cues:', runtime.cueSchedule.length, runtime.isUserJumping ? '(user jump)' : '(after manual)');
         stopNativeTimer().then(() =>
-          startNativeTimerWithSchedule(nativeCueSchedule, state.activePace?.name || 'Pacer')
+          startNativeTimerWithSchedule(runtime.cueSchedule, runtime.pace?.name || 'Pacer')
         );
       }
     }
-    _userJumping = false;
+    runtime.isUserJumping = false;
   },
 
   onTick(tickData) {
     const { secondsLeft, elapsedInSegment, isManual } = tickData;
-    cues.tick(elapsedInSegment);
+    runtime.cues.tick(elapsedInSegment);
 
     if (!isManual) {
-      const tc     = state.activePace?.transitionCountdown ?? '5';
+      const tc     = runtime.pace?.transitionCountdown ?? '5';
       const thresh = Number(tc);
-      const segDur = timer.flatSegments[timer.segmentIndex]?.duration ?? 0;
+      const segDur = runtime.timer.flatSegments[runtime.timer.segmentIndex]?.duration ?? 0;
       // Only count down when the step is long enough to make it meaningful
       if (tc !== 'silent' && segDur > thresh * 2) {
-        cues.countdown(secondsLeft, thresh);
+        runtime.cues.countdown(secondsLeft, thresh);
       }
       // Segment complete — bypass transition and snap bar to 100% so it
       // visually reaches the right edge before the next segment resets it.
@@ -165,16 +175,26 @@ const timer = new TimerEngine({
   },
 
   onComplete(totalElapsedSeconds) {
-    cues.speak('Pace complete. Well done!');
-    document.getElementById('complete-name').textContent = state.activePace?.name || '';
+    runtime.cues.speak('Pace complete. Well done!');
+    document.getElementById('complete-name').textContent = runtime.pace?.name || '';
     document.getElementById('complete-time').textContent = 'Total: ' + formatTime(totalElapsedSeconds);
     showScreen('complete');
   },
 
 });
 
+/** Reset per-pace runtime fields to "no pace running".  Keeps the long-lived
+ *  TimerEngine and CueScheduler instances — only the data fields are zeroed. */
+function _resetRuntimeForNoPace() {
+  runtime.pace          = null;
+  runtime.cueSchedule   = null;
+  runtime.chunkStartMs  = 0;
+  runtime.pausedAtMs    = 0;
+  runtime.isUserJumping = false;
+}
+
 // Dev console access — remove before shipping to production
-window.__pacer__ = { state, timer, cues };
+window.__pacer__ = { state, runtime };
 
 // ============================================================
 // 4. UI HELPERS  (produce HTML strings — stay in app.js)
@@ -821,32 +841,32 @@ function startPace(pace) {
   const flat = flattenItems(pace.items);
   if (!flat.length) { alert('This pace has no steps.'); return; }
 
-  state.activePace = pace;
-  cues.setVoice(state.settings.voiceName);
+  runtime.pace = pace;
+  runtime.cues.setVoice(state.settings.voiceName);
   document.getElementById('timer-pace-name').textContent = pace.name || 'Pacer';
   buildOverallDots(flat.length);
   showScreen('timer');
-  timer.start(flat);
+  runtime.timer.start(flat);
 
   if (window.Capacitor?.isNativePlatform()) {
     // Build a cue schedule for the first contiguous timed chunk (stops before the
     // first manual step). The onSegmentStart handler restarts a new chunk each time
     // the user taps through a manual step back into timed steps.
     const tc          = pace.transitionCountdown ?? '5';
-    nativeCueSchedule = buildNativeChunk(flat, 0, tc);
-    nativeTimerStartMs = Date.now();
-    _nativePausedAt    = 0;
+    runtime.cueSchedule = buildNativeChunk(flat, 0, tc);
+    runtime.chunkStartMs = Date.now();
+    runtime.pausedAtMs    = 0;
     console.log('[Pacer] starting native timer — segments:', flat.length,
-      ', first chunk cues:', nativeCueSchedule.length);
-    if (nativeCueSchedule.length > 0) {
-      startNativeTimerWithSchedule(nativeCueSchedule, pace.name || 'Pacer');
+      ', first chunk cues:', runtime.cueSchedule.length);
+    if (runtime.cueSchedule.length > 0) {
+      startNativeTimerWithSchedule(runtime.cueSchedule, pace.name || 'Pacer');
     }
   }
 }
 
 function updateTimerDisplay(tickData = null) {
-  const idx = timer.segmentIndex;
-  const seg = timer.flatSegments[idx];
+  const idx = runtime.timer.segmentIndex;
+  const seg = runtime.timer.flatSegments[idx];
   if (!seg) return;
 
   const isManual     = seg.duration === 0;
@@ -891,7 +911,7 @@ function updateTimerDisplay(tickData = null) {
     else if (i === idx) dot.classList.add('active');
   });
 
-  const next = timer.flatSegments[idx + 1];
+  const next = runtime.timer.flatSegments[idx + 1];
   document.getElementById('timer-next').textContent = next
     ? `Next: ${next.name}${next.duration > 0 ? ' · ' + formatTime(next.duration) : ' · On Tap'}`
     : 'Final step';
@@ -941,34 +961,34 @@ function _setPauseBtnIcon(isPaused) {
 }
 
 function pauseTimer() {
-  timer.pause();
+  runtime.timer.pause();
   _setPauseBtnIcon(true);
   document.getElementById('timer-clock').classList.add('paused');
   if (window.Capacitor?.isNativePlatform()) {
-    _nativePausedAt = Date.now();   // record when pause began for epoch adjustment on resume
+    runtime.pausedAtMs = Date.now();   // record when pause began for epoch adjustment on resume
     stopNativeTimer();
   }
 }
 
 function resumeTimer() {
-  timer.resume();
+  runtime.timer.resume();
   _setPauseBtnIcon(false);
   document.getElementById('timer-clock').classList.remove('paused');
-  if (window.Capacitor?.isNativePlatform() && nativeCueSchedule) {
-    // Shift nativeTimerStartMs forward by the pause duration so that
-    // Date.now() - nativeTimerStartMs continues to equal "timer-elapsed ms"
+  if (window.Capacitor?.isNativePlatform() && runtime.cueSchedule) {
+    // Shift runtime.chunkStartMs forward by the pause duration so that
+    // Date.now() - runtime.chunkStartMs continues to equal "timer-elapsed ms"
     // even after any number of pauses.
-    if (_nativePausedAt > 0) {
-      nativeTimerStartMs += Date.now() - _nativePausedAt;
-      _nativePausedAt = 0;
+    if (runtime.pausedAtMs > 0) {
+      runtime.chunkStartMs += Date.now() - runtime.pausedAtMs;
+      runtime.pausedAtMs = 0;
     }
-    const elapsedMs = Date.now() - nativeTimerStartMs;
+    const elapsedMs = Date.now() - runtime.chunkStartMs;
     // Re-start the service with only the cues that haven't fired yet, shifted to "from now".
-    const remaining = nativeCueSchedule
+    const remaining = runtime.cueSchedule
       .filter(c => c.delayMs > elapsedMs)
       .map(c => ({ ...c, delayMs: c.delayMs - elapsedMs }));
-    nativeTimerStartMs = Date.now();   // reset — remaining cues are now relative to now
-    startNativeTimerWithSchedule(remaining, state.activePace?.name || 'Pacer');
+    runtime.chunkStartMs = Date.now();   // reset — remaining cues are now relative to now
+    startNativeTimerWithSchedule(remaining, runtime.pace?.name || 'Pacer');
   }
 }
 
@@ -984,42 +1004,39 @@ function _syncPlayingUi() {
 
 /** Restart the current step from its beginning. */
 function restartCurrentStep() {
-  if (!state.activePace) return;
-  cues.stop();
-  _userJumping = true;
-  timer.restartSegment();
+  if (!runtime.pace) return;
+  runtime.cues.stop();
+  runtime.isUserJumping = true;
+  runtime.timer.restartSegment();
   _syncPlayingUi();
 }
 
 /** Jump to the start of the previous step. No-op on the first step. */
 function previousStep() {
-  if (!state.activePace || timer.segmentIndex <= 0) return;
-  cues.stop();
-  _userJumping = true;
-  timer.previousSegment();
+  if (!runtime.pace || runtime.timer.segmentIndex <= 0) return;
+  runtime.cues.stop();
+  runtime.isUserJumping = true;
+  runtime.timer.previousSegment();
   _syncPlayingUi();
 }
 
 /** Jump to the start of the next step. On the last step, confirm + end the pace. */
 function nextStep() {
-  if (!state.activePace) return;
-  if (timer.segmentIndex >= timer.flatSegments.length - 1) {
+  if (!runtime.pace) return;
+  if (runtime.timer.segmentIndex >= runtime.timer.flatSegments.length - 1) {
     if (confirm('End this pace?')) { endPace(); showScreen('home'); }
     return;
   }
-  cues.stop();
-  _userJumping = true;
-  timer.nextSegment();
+  runtime.cues.stop();
+  runtime.isUserJumping = true;
+  runtime.timer.nextSegment();
   _syncPlayingUi();
 }
 
 function endPace() {
-  timer.stop();
-  cues.stop();
-  state.activePace   = null;
-  nativeCueSchedule  = null;
-  nativeTimerStartMs = 0;
-  _nativePausedAt    = 0;
+  runtime.timer.stop();
+  runtime.cues.stop();
+  _resetRuntimeForNoPace();
   if (window.Capacitor?.isNativePlatform()) {
     stopNativeTimer();
   }
@@ -1042,7 +1059,7 @@ function saveSettingsFromUI() {
   state.settings.apiKey    = document.getElementById('settings-api-key').value.trim();
   state.settings.voiceName = document.getElementById('settings-voice').value;
   saveSettings();
-  cues.setVoice(state.settings.voiceName);
+  runtime.cues.setVoice(state.settings.voiceName);
   syncPaces();
 }
 
@@ -1157,9 +1174,9 @@ document.getElementById('btn-start-pace').addEventListener('click', () => {
 document.getElementById('btn-end-pace').addEventListener('click', () => {
   if (confirm('End this pace?')) { endPace(); showScreen('home'); }
 });
-document.getElementById('btn-manual-next').addEventListener('click', () => timer.advanceManual());
+document.getElementById('btn-manual-next').addEventListener('click', () => runtime.timer.advanceManual());
 document.getElementById('btn-pause-resume').addEventListener('click', () => {
-  if (timer.isPaused) resumeTimer(); else pauseTimer();
+  if (runtime.timer.isPaused) resumeTimer(); else pauseTimer();
 });
 document.getElementById('btn-prev-step')   .addEventListener('click', previousStep);
 document.getElementById('btn-restart-step').addEventListener('click', restartCurrentStep);
@@ -1167,7 +1184,7 @@ document.getElementById('btn-next-step')   .addEventListener('click', nextStep);
 
 document.getElementById('btn-complete-home').addEventListener('click', () => showScreen('home'));
 document.getElementById('btn-do-again').addEventListener('click', () => {
-  if (state.activePace) startPace(state.activePace); else showScreen('home');
+  if (runtime.pace) startPace(runtime.pace); else showScreen('home');
 });
 
 document.getElementById('btn-settings-back').addEventListener('click', () => showScreen('home'));
@@ -1214,7 +1231,7 @@ async function initPlatform() {
     console.warn('PacerTimer plugin not found — falling back to web TTS');
     return;
   }
-  cues.setSpeakFn(() => Promise.resolve());
+  runtime.cues.setSpeakFn(() => Promise.resolve());
 }
 
 async function init() {
@@ -1225,7 +1242,7 @@ async function init() {
   renderPaceList();
   await loadTemplates();
   await initPlatform();
-  cues.setVoice(state.settings.voiceName);
+  runtime.cues.setVoice(state.settings.voiceName);
   syncPaces();
   // Skip Service Worker inside Capacitor — it uses its own asset serving layer.
   if ('serviceWorker' in navigator && !window.Capacitor?.isNativePlatform()) {
