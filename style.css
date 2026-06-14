@@ -117,6 +117,10 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
 .btn-secondary:hover,.btn-secondary:active { background:var(--surface3); }
 .btn-sm { font-size:14px; padding:10px 14px; flex:0 0 auto; }
 .btn-large { font-size:18px; padding:16px 32px; flex:2; }
+/* Square-ish icon buttons used in the media-style timer controls.
+   .btn-icon = secondary (prev / restart / next).  .btn-icon-lg = primary (play / pause). */
+.btn-icon    { flex:0 0 auto; min-width:52px; padding:13px 0; font-size:20px; line-height:1; }
+.btn-icon-lg { flex:0 0 auto; min-width:76px; padding:18px 0; font-size:28px; line-height:1; }
 .builder-footer { flex-wrap:nowrap; }
 
 /* ============================================================

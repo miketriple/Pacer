@@ -68,6 +68,41 @@ export class TimerEngine {
     else this._startSegment(this._segIndex);
   }
 
+  /**
+   * Restart the current segment from the beginning. Auto-resumes if paused
+   * (caller is responsible for syncing the pause-button UI).
+   */
+  restartSegment() {
+    if (!this._running) return;
+    clearInterval(this._interval);
+    this._isPaused = false;
+    this._pausedAt = null;
+    this._startSegment(this._segIndex);
+  }
+
+  /** Jump to the start of the previous segment. No-op at the first segment. */
+  previousSegment() {
+    if (!this._running || this._segIndex <= 0) return;
+    clearInterval(this._interval);
+    this._isPaused = false;
+    this._pausedAt = null;
+    this._startSegment(this._segIndex - 1);
+  }
+
+  /**
+   * Jump to the start of the next segment.
+   * If already past the last segment, calls onComplete (caller can confirm + endPace).
+   */
+  nextSegment() {
+    if (!this._running) return;
+    clearInterval(this._interval);
+    this._isPaused = false;
+    this._pausedAt = null;
+    this._segIndex++;
+    if (this._segIndex >= this.flatSegments.length) this._complete();
+    else this._startSegment(this._segIndex);
+  }
+
   // ── Getters ──────────────────────────────────────────────────
 
   get isPaused()      { return this._isPaused; }

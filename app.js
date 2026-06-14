@@ -61,12 +61,23 @@ let nativeCueSchedule = null;
 let nativeTimerStartMs = 0;
 // Wall-clock ms when the last pause began; 0 when not paused.
 let _nativePausedAt = 0;
+// Set true just before a user-initiated jump (restart-step / prev-step / next-step)
+// so onSegmentStart knows to rebuild the native cue chunk from the new position
+// rather than relying on the pre-scheduled timeline. Cleared at the end of onSegmentStart.
+let _userJumping = false;
 
 // ============================================================
 // 3. SERVICES
 // ============================================================
 
 const cues  = new CueScheduler();
+
+// On Android, all TTS goes through PacerTimerService (native Android TTS).
+// Injecting no-ops prevents the WebView's speechSynthesis from being called,
+// which would otherwise cancel native TTS cues at every segment transition.
+if (window.Capacitor?.isNativePlatform()) {
+  cues.setSpeakFn(() => Promise.resolve(), () => Promise.resolve());
+}
 
 const timer = new TimerEngine({
 
@@ -80,25 +91,47 @@ const timer = new TimerEngine({
     requestAnimationFrame(() => { fill.style.transition = ''; }); // restore
     animatePhaseTransition();
 
-    // Native timer: when advancing from a manual step into a timed step,
-    // restart a new native timer chunk for the remaining timed segments.
-    // (Manual steps require the screen to be visible, so no native audio is
-    // needed during them — we restart only when returning to timed steps.)
-    if (window.Capacitor?.isNativePlatform() && state.activePace && idx > 0) {
-      const flat    = timer.flatSegments;
-      const prevSeg = flat[idx - 1];
-      if ((prevSeg?.duration || 0) === 0 && (seg.duration || 0) > 0) {
+    // Native timer: route all audio through Android TTS because Web Speech API
+    // is unreliable in the Capacitor WebView.
+    if (window.Capacitor?.isNativePlatform() && state.activePace) {
+      const flat     = timer.flatSegments;
+      const prevSeg  = flat[idx - 1];
+      const isManual = (seg.duration || 0) === 0;
+
+      if (isManual) {
+        // Manual step — fire its opening cue (and any timed extra cues) now.
+        const openingText = seg.voiceCues?.[0]?.text || seg.name;
+        const extraCues   = (seg.voiceCues || []).slice(1)
+          .filter(c => c.text)
+          .map(c => ({ delayMs: c.offsetSeconds * 1000, text: c.text }));
+        const cueList = openingText
+          ? [{ delayMs: 0, text: openingText }, ...extraCues]
+          : extraCues;
+        if (cueList.length > 0) {
+          nativeCueSchedule  = cueList;
+          nativeTimerStartMs = Date.now();
+          _nativePausedAt    = 0;
+          console.log('[Pacer] manual step cue:', openingText);
+          startNativeTimerWithSchedule(cueList, state.activePace?.name || 'Pacer');
+        } else {
+          nativeCueSchedule = null;
+        }
+      } else if (_userJumping || (idx > 0 && (prevSeg?.duration || 0) === 0)) {
+        // User jumped to a timed step (or naturally advanced from a manual step)
+        // — rebuild the native chunk from this position. The pre-scheduled timeline
+        // from the previous chunk would now be wrong.
         const tc          = state.activePace.transitionCountdown ?? '5';
         nativeCueSchedule = buildNativeChunk(flat, idx, tc);
         nativeTimerStartMs = Date.now();
         _nativePausedAt    = 0;
-        console.log('[Pacer] restarting native chunk at seg', idx,
-          '— cues:', nativeCueSchedule.length);
+        console.log('[Pacer] rebuilding native chunk at seg', idx,
+          '— cues:', nativeCueSchedule.length, _userJumping ? '(user jump)' : '(after manual)');
         stopNativeTimer().then(() =>
           startNativeTimerWithSchedule(nativeCueSchedule, state.activePace?.name || 'Pacer')
         );
       }
     }
+    _userJumping = false;
   },
 
   onTick(tickData) {
@@ -780,9 +813,21 @@ function animatePhaseTransition() {
   body.classList.add('phase-transition');
 }
 
+/**
+ * Set the play/pause button to show either ⏸ (currently playing → tap to pause)
+ * or ▶ (currently paused → tap to resume), with matching aria-label and tooltip.
+ */
+function _setPauseBtnIcon(isPaused) {
+  const btn = document.getElementById('btn-pause-resume');
+  const label = isPaused ? 'Resume' : 'Pause';
+  btn.textContent = isPaused ? '▶' : '⏸';
+  btn.setAttribute('aria-label', label);
+  btn.setAttribute('title',      label);
+}
+
 function pauseTimer() {
   timer.pause();
-  document.getElementById('btn-pause-resume').textContent = 'Resume';
+  _setPauseBtnIcon(true);
   document.getElementById('timer-clock').classList.add('paused');
   if (window.Capacitor?.isNativePlatform()) {
     _nativePausedAt = Date.now();   // record when pause began for epoch adjustment on resume
@@ -792,7 +837,7 @@ function pauseTimer() {
 
 function resumeTimer() {
   timer.resume();
-  document.getElementById('btn-pause-resume').textContent = 'Pause';
+  _setPauseBtnIcon(false);
   document.getElementById('timer-clock').classList.remove('paused');
   if (window.Capacitor?.isNativePlatform() && nativeCueSchedule) {
     // Shift nativeTimerStartMs forward by the pause duration so that
@@ -812,23 +857,45 @@ function resumeTimer() {
   }
 }
 
-function restartPaceTimer() {
-  cues.stop();
-  timer.restart();
-  document.getElementById('btn-pause-resume').textContent = 'Pause';
+/**
+ * Sync the pause-button label and clock styling after a jump that may have
+ * unpaused the timer. (TimerEngine's restartSegment/previousSegment/nextSegment
+ * auto-unpause; this brings the UI back into agreement.)
+ */
+function _syncPlayingUi() {
+  _setPauseBtnIcon(false);
   document.getElementById('timer-clock').classList.remove('paused');
-  if (window.Capacitor?.isNativePlatform() && state.activePace) {
-    const flat        = flattenItems(state.activePace.items);
-    const tc          = state.activePace.transitionCountdown ?? '5';
-    nativeCueSchedule = buildNativeChunk(flat, 0, tc);
-    nativeTimerStartMs = Date.now();
-    _nativePausedAt    = 0;
-    stopNativeTimer().then(() => {
-      if (nativeCueSchedule.length > 0) {
-        startNativeTimerWithSchedule(nativeCueSchedule, state.activePace?.name || 'Pacer');
-      }
-    });
+}
+
+/** Restart the current step from its beginning. */
+function restartCurrentStep() {
+  if (!state.activePace) return;
+  cues.stop();
+  _userJumping = true;
+  timer.restartSegment();
+  _syncPlayingUi();
+}
+
+/** Jump to the start of the previous step. No-op on the first step. */
+function previousStep() {
+  if (!state.activePace || timer.segmentIndex <= 0) return;
+  cues.stop();
+  _userJumping = true;
+  timer.previousSegment();
+  _syncPlayingUi();
+}
+
+/** Jump to the start of the next step. On the last step, confirm + end the pace. */
+function nextStep() {
+  if (!state.activePace) return;
+  if (timer.segmentIndex >= timer.flatSegments.length - 1) {
+    if (confirm('End this pace?')) { endPace(); showScreen('home'); }
+    return;
   }
+  cues.stop();
+  _userJumping = true;
+  timer.nextSegment();
+  _syncPlayingUi();
 }
 
 function endPace() {
@@ -979,9 +1046,9 @@ document.getElementById('btn-manual-next').addEventListener('click', () => timer
 document.getElementById('btn-pause-resume').addEventListener('click', () => {
   if (timer.isPaused) resumeTimer(); else pauseTimer();
 });
-document.getElementById('btn-restart').addEventListener('click', () => {
-  if (confirm('Restart from the beginning?')) restartPaceTimer();
-});
+document.getElementById('btn-prev-step')   .addEventListener('click', previousStep);
+document.getElementById('btn-restart-step').addEventListener('click', restartCurrentStep);
+document.getElementById('btn-next-step')   .addEventListener('click', nextStep);
 
 document.getElementById('btn-complete-home').addEventListener('click', () => showScreen('home'));
 document.getElementById('btn-do-again').addEventListener('click', () => {
