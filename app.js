@@ -53,6 +53,11 @@ const state = {
 
 const pendingDeletes = new Set();
 
+// True while the user is in "Reorder" mode on the home screen.  In this mode,
+// pace cards show ↑/↓ controls and tapping a card does NOT open the builder
+// (so an accidental tap mid-rearrange can't start a pace).
+let reorderMode = false;
+
 // Holds the pre-computed native cue schedule for the current timed chunk.
 // null when no native timer is running.
 let nativeCueSchedule = null;
@@ -181,6 +186,25 @@ function paceColorDots(pace) {
     .join('');
 }
 
+/**
+ * Ensure every pace has a numeric `order` field.  Paces missing one are
+ * assigned the next sparse integer (existing array order is preserved on first
+ * backfill).  Sparse steps of 10 leave room to insert without renumbering.
+ */
+function ensurePaceOrder(paces) {
+  const existingMax = paces.reduce(
+    (m, p) => typeof p.order === 'number' ? Math.max(m, p.order) : m,
+    0
+  );
+  let next = existingMax + 10;
+  paces.forEach(p => {
+    if (typeof p.order !== 'number') {
+      p.order = next;
+      next += 10;
+    }
+  });
+}
+
 function templateColorDots(items) {
   return flattenItems(items).slice(0, 4)
     .map(s => `<span class="template-card-dot" style="background:${colorHex(s.color)}"></span>`)
@@ -206,7 +230,9 @@ function loadLocalPaces() {
   try {
     const s = localStorage.getItem('pacer_paces');
     if (!s) return [];
-    return JSON.parse(s).map(migratePace);
+    const paces = JSON.parse(s).map(migratePace);
+    ensurePaceOrder(paces);
+    return paces;
   } catch (e) { return []; }
 }
 
@@ -232,6 +258,7 @@ async function syncPaces() {
     state.paces   = (data.workouts || data)
       .filter(p => !pendingDeletes.has(p.id))
       .map(migratePace);
+    ensurePaceOrder(state.paces);
     saveLocalPaces();
     setSyncStatus('Synced', 'ok');
     renderPaceList();
@@ -242,7 +269,20 @@ async function syncPaces() {
 
 async function persistPace(pace) {
   const idx = state.paces.findIndex(p => p.id === pace.id);
-  if (idx >= 0) state.paces[idx] = pace; else state.paces.unshift(pace);
+  if (idx >= 0) {
+    // Editing an existing pace — preserve its current order so reorder isn't undone.
+    if (typeof pace.order !== 'number') pace.order = state.paces[idx].order;
+    state.paces[idx] = pace;
+  } else {
+    // New pace — slot it at the top by giving it a smaller order than any existing.
+    if (typeof pace.order !== 'number') {
+      const minOrder = state.paces.length
+        ? Math.min(...state.paces.map(p => p.order ?? 0))
+        : 10;
+      pace.order = minOrder - 10;
+    }
+    state.paces.unshift(pace);
+  }
   saveLocalPaces();
   renderPaceList();
   try { await apiRequest('PUT', `/workouts/${pace.id}`, pace); } catch (e) {}
@@ -255,6 +295,28 @@ async function deletePace(id) {
   renderPaceList();
   try { await apiRequest('DELETE', `/workouts/${id}`); pendingDeletes.delete(id); } catch (e) {}
 }
+
+/**
+ * Swap the `order` field of the pace with `paceId` and its adjacent neighbor in
+ * the sorted list (delta = -1 → swap with the one above, +1 → with the one below).
+ * Persists locally immediately and fires-and-forgets the server PUTs for both.
+ */
+async function _swapAdjacentPace(paceId, delta) {
+  const sorted = state.paces.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const i = sorted.findIndex(p => p.id === paceId);
+  if (i < 0) return;
+  const j = i + delta;
+  if (j < 0 || j >= sorted.length) return;     // already at edge
+  const a = sorted[i], b = sorted[j];
+  const tmp = a.order; a.order = b.order; b.order = tmp;
+  saveLocalPaces();
+  renderPaceList();
+  // Fire both PUTs concurrently — they're independent and we don't block UI on them.
+  [a, b].forEach(p => apiRequest('PUT', `/workouts/${p.id}`, p).catch(() => {}));
+}
+
+const movePaceUp   = id => _swapAdjacentPace(id, -1);
+const movePaceDown = id => _swapAdjacentPace(id, +1);
 
 function setSyncStatus(msg, cls = '') {
   const el = document.getElementById('sync-status');
@@ -280,16 +342,36 @@ function showScreen(id) {
 function renderPaceList() {
   const container = document.getElementById('pace-list');
   if (!state.paces.length) {
+    reorderMode = false;   // nothing to reorder; reset so toggle is fresh next time
     container.innerHTML = `<div class="pace-empty">
       <div class="pace-empty-title">No paces yet</div>
       Tap <strong>+ New Pace</strong> to build your first guided rhythm.
     </div>`;
     return;
   }
-  container.innerHTML = `<div class="pace-group-title">My Paces</div>
+
+  const toggleLabel = reorderMode ? 'Done' : 'Reorder';
+  const toggleCls   = reorderMode ? 'pace-reorder-toggle is-active' : 'pace-reorder-toggle';
+  container.innerHTML = `
+    <div class="pace-group-header">
+      <div class="pace-group-title">My Paces</div>
+      <button class="${toggleCls}" id="btn-reorder-toggle">${toggleLabel}</button>
+    </div>
     <div class="pace-group-body" id="pace-group-body"></div>`;
-  const body = document.getElementById('pace-group-body');
-  state.paces.forEach(pace => body.appendChild(makePaceCard(pace)));
+
+  const body   = document.getElementById('pace-group-body');
+  const sorted = state.paces.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  sorted.forEach((pace, i) => {
+    const card = reorderMode
+      ? makeReorderCard(pace, i, sorted.length)
+      : makePaceCard(pace);
+    body.appendChild(card);
+  });
+
+  document.getElementById('btn-reorder-toggle').addEventListener('click', () => {
+    reorderMode = !reorderMode;
+    renderPaceList();
+  });
 }
 
 function makePaceCard(pace) {
@@ -304,6 +386,29 @@ function makePaceCard(pace) {
     <div class="pace-card-arrow">›</div>`;
   btn.addEventListener('click', () => openBuilder(pace));
   return btn;
+}
+
+/**
+ * Card variant shown while reorderMode is active.  Uses a <div> (not <button>)
+ * so the card body isn't tappable — only the ↑/↓ controls are.  Edge arrows
+ * (first card's ↑, last card's ↓) are disabled to signal "can't go further".
+ */
+function makeReorderCard(pace, idx, total) {
+  const card = document.createElement('div');
+  card.className = 'pace-card pace-card-reorder';
+  card.innerHTML = `
+    <div class="pace-card-dots">${paceColorDots(pace)}</div>
+    <div class="pace-card-info">
+      <div class="pace-card-name">${escHtml(pace.name || 'Untitled Pace')}</div>
+      <div class="pace-card-meta">${paceMeta(pace)}</div>
+    </div>
+    <div class="pace-reorder-arrows">
+      <button class="reorder-arrow" data-action="up"   aria-label="Move up"  ${idx === 0          ? 'disabled' : ''}>↑</button>
+      <button class="reorder-arrow" data-action="down" aria-label="Move down"${idx === total - 1  ? 'disabled' : ''}>↓</button>
+    </div>`;
+  card.querySelector('[data-action="up"]')  .addEventListener('click', () => movePaceUp(pace.id));
+  card.querySelector('[data-action="down"]').addEventListener('click', () => movePaceDown(pace.id));
+  return card;
 }
 
 // ============================================================
@@ -828,6 +933,9 @@ function _setPauseBtnIcon(isPaused) {
   const btn = document.getElementById('btn-pause-resume');
   const label = isPaused ? 'Resume' : 'Pause';
   btn.innerHTML = isPaused ? _PLAY_SVG : _PAUSE_SVG;
+  // .is-paused gives the play icon an accent fill so it visually invites a tap;
+  // the pause icon stays neutral while the pace is running.
+  btn.classList.toggle('is-paused', isPaused);
   btn.setAttribute('aria-label', label);
   btn.setAttribute('title',      label);
 }
