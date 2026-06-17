@@ -749,6 +749,7 @@ function buildGroupCard(group, groupIdx) {
   card.className  = 'group-card';
   card.dataset.id = group.id;
 
+  const totalGroups = state.editingPace.items.length;
   const header = document.createElement('div');
   header.className = 'group-header';
   header.innerHTML = `
@@ -758,17 +759,35 @@ function buildGroupCard(group, groupIdx) {
       <span class="group-repeats-x">×</span>
       <span class="group-repeats-label">repeats</span>
     </div>
-    <button class="step-action-btn danger" aria-label="Delete group" title="Remove group">×</button>`;
+    <div class="step-secondary-actions">
+      <button class="step-action-btn" data-action="up"   ${groupIdx === 0 ? 'disabled' : ''}                aria-label="Move group up">↑</button>
+      <button class="step-action-btn" data-action="down" ${groupIdx === totalGroups - 1 ? 'disabled' : ''}  aria-label="Move group down">↓</button>
+      <button class="step-action-btn" data-action="dup"  aria-label="Duplicate group"><svg xmlns="http://www.w3.org/2000/svg" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg></button>
+      <button class="step-action-btn danger" data-action="del" aria-label="Delete group" title="Remove group">×</button>
+    </div>`;
   card.appendChild(header);
 
   header.querySelector('.group-name-input').addEventListener('input', e => { group.name = e.target.value; });
   header.querySelector('.group-repeats-input').addEventListener('change', e => { group.repeats = parseInt(e.target.value) || 1; });
-  header.querySelector('.step-action-btn.danger').addEventListener('click', () => {
-    if (confirm(`Remove group "${group.name || 'Group'}"?`)) {
+
+  // Group-level actions reuse handleStepAction since it operates generically on
+  // any items array.  Delete keeps its own handler to preserve the confirmation
+  // dialog (a group can hold many steps; an accidental click is more costly).
+  header.querySelectorAll('.step-action-btn').forEach(btn => {
+    btn.addEventListener('click', () => {
+      const action = btn.dataset.action;
+      if (action === 'del') {
+        if (confirm(`Remove group "${group.name || 'Group'}"?`)) {
+          syncBuilderState();
+          state.editingPace.items.splice(groupIdx, 1);
+          renderBuilder();
+        }
+        return;
+      }
       syncBuilderState();
-      state.editingPace.items.splice(groupIdx, 1);
+      handleStepAction(action, state.editingPace.items, groupIdx);
       renderBuilder();
-    }
+    });
   });
 
   const body = document.createElement('div');
