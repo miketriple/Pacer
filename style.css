@@ -102,6 +102,9 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
 .icon-btn:hover,.icon-btn:active { background:var(--accent-dim); color:var(--accent); }
 .icon-btn.danger-btn { color:var(--text-muted); }
 .icon-btn.danger-btn:hover,.icon-btn.danger-btn:active { background:rgba(255,60,60,.12); color:#ff4444; }
+/* Brief flash applied to the save button after a successful save, to reassure
+   the user their changes have been persisted. */
+.icon-btn.is-saved { background:var(--accent); color:var(--accent-text); }
 .text-btn { font-family:'Barlow Condensed',sans-serif; font-size:16px; font-weight:500; color:var(--text-muted); padding:6px 10px; border-radius:8px; transition:color var(--transition),background var(--transition); }
 .danger-text { color:rgba(255,80,80,.8); }
 .danger-text:hover { background:rgba(255,60,60,.1); color:#ff4444; }
@@ -149,7 +152,9 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
 
 .pace-card { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:14px 16px; display:flex; align-items:center; justify-content:space-between; gap:12px; cursor:pointer; text-align:left; width:100%; transition:background var(--transition),border-color var(--transition),transform var(--transition); }
 .pace-card:hover,.pace-card:active { background:var(--surface2); border-color:var(--accent-dim); transform:translateX(3px); }
-.pace-card-dots { display:flex; gap:4px; flex-shrink:0; }
+/* Fixed minimum width matches the 5-dot case (5 × 8 px + 4 × 4 px = 56 px) so
+   pace names line up regardless of how many dots a particular pace renders. */
+.pace-card-dots { display:flex; gap:4px; flex-shrink:0; min-width:56px; }
 .pace-card-dot { width:8px; height:8px; border-radius:50%; }
 .pace-card-info { flex:1; min-width:0; }
 .pace-card-name { font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:17px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }

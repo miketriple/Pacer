@@ -1133,6 +1133,15 @@ document.getElementById('btn-builder-back').addEventListener('click', () => {
   showScreen('home');
 });
 
+document.getElementById('btn-save-pace').addEventListener('click', () => {
+  // Same persist call the back button uses — the back button autosaves, this
+  // gives the user an explicit "yes, it's saved" action with visual feedback.
+  persistPace(savePaceFromBuilder());
+  const btn = document.getElementById('btn-save-pace');
+  btn.classList.add('is-saved');
+  setTimeout(() => btn.classList.remove('is-saved'), 1200);
+});
+
 document.getElementById('btn-delete-pace').addEventListener('click', async () => {
   if (!state.editingPace) return;
   if (confirm(`Delete "${state.editingPace.name || 'this pace'}"?`)) {

@@ -189,10 +189,14 @@ export class TimerEngine {
   }
 
   _complete() {
+    // Read totalElapsedSeconds BEFORE _running flips to false — the getter
+    // short-circuits to 0 when !this._running, so reading after the flip
+    // would hand onComplete an incorrect 0.
+    const total = this.totalElapsedSeconds;
     clearInterval(this._interval);
     this._running = false;
     this._detachVisibility();
-    this.callbacks.onComplete?.(this.totalElapsedSeconds);
+    this.callbacks.onComplete?.(total);
   }
 
   // ── Background / Foreground Recovery ────────────────────────
