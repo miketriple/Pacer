@@ -52,9 +52,9 @@ const state = {
 
 const pendingDeletes = new Set();
 
-// True while the user is in "Reorder" mode on the home screen.  In this mode,
-// pace cards show ↑/↓ controls and tapping a card does NOT open the builder
-// (so an accidental tap mid-rearrange can't start a pace).
+// True while the user is in Edit mode on the home screen.  In this mode,
+// pace cards show ↑ ↓ ⎘ controls and tapping a card does NOT open the builder
+// (so an accidental tap mid-edit can't start a pace).
 let reorderMode = false;
 
 // ============================================================
@@ -317,6 +317,32 @@ async function deletePace(id) {
 }
 
 /**
+ * Create a deep copy of a pace with fresh IDs throughout (steps, group-nested
+ * steps, voice cues all get new IDs via regenIds).  The copy's name is
+ * suffixed with " (copy)" and its `order` slots directly after the original
+ * in the sort order, so the duplicate appears right below the original on
+ * the home screen.  Returns the new pace; caller decides whether to
+ * persistPace it, open it in the builder, etc.
+ */
+function duplicatePace(pace) {
+  const copy = JSON.parse(JSON.stringify(pace));
+  copy.id   = genId();
+  regenIds(copy.items);
+  copy.name = (pace.name || 'Pace') + ' (copy)';
+
+  // Slot order between the original and the next pace in sort order.
+  const sorted    = state.paces.slice().sort((a, b) => (a.order ?? 0) - (b.order ?? 0));
+  const idx       = sorted.findIndex(p => p.id === pace.id);
+  const baseOrder = pace.order ?? 0;
+  const next      = sorted[idx + 1];
+  copy.order = next
+    ? (baseOrder + (next.order ?? baseOrder + 20)) / 2
+    : baseOrder + 10;
+
+  return copy;
+}
+
+/**
  * Swap the `order` field of the pace with `paceId` and its adjacent neighbor in
  * the sorted list (delta = -1 → swap with the one above, +1 → with the one below).
  * Persists locally immediately and fires-and-forgets the server PUTs for both.
@@ -370,7 +396,7 @@ function renderPaceList() {
     return;
   }
 
-  const toggleLabel = reorderMode ? 'Done' : 'Reorder';
+  const toggleLabel = reorderMode ? 'Done' : 'Edit';
   const toggleCls   = reorderMode ? 'pace-reorder-toggle is-active' : 'pace-reorder-toggle';
   container.innerHTML = `
     <div class="pace-group-header">
@@ -409,8 +435,8 @@ function makePaceCard(pace) {
 }
 
 /**
- * Card variant shown while reorderMode is active.  Uses a <div> (not <button>)
- * so the card body isn't tappable — only the ↑/↓ controls are.  Edge arrows
+ * Card variant shown while Edit mode is active.  Uses a <div> (not <button>)
+ * so the card body isn't tappable — only the ↑ ↓ ⎘ controls are.  Edge arrows
  * (first card's ↑, last card's ↓) are disabled to signal "can't go further".
  */
 function makeReorderCard(pace, idx, total) {
@@ -425,9 +451,13 @@ function makeReorderCard(pace, idx, total) {
     <div class="pace-reorder-arrows">
       <button class="reorder-arrow" data-action="up"   aria-label="Move up"  ${idx === 0          ? 'disabled' : ''}>↑</button>
       <button class="reorder-arrow" data-action="down" aria-label="Move down"${idx === total - 1  ? 'disabled' : ''}>↓</button>
+      <button class="reorder-arrow" data-action="dup"  aria-label="Duplicate"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg></button>
     </div>`;
   card.querySelector('[data-action="up"]')  .addEventListener('click', () => movePaceUp(pace.id));
   card.querySelector('[data-action="down"]').addEventListener('click', () => movePaceDown(pace.id));
+  card.querySelector('[data-action="dup"]') .addEventListener('click', () => {
+    persistPace(duplicatePace(pace));
+  });
   return card;
 }
 
@@ -1159,6 +1189,18 @@ document.getElementById('btn-save-pace').addEventListener('click', () => {
   const btn = document.getElementById('btn-save-pace');
   btn.classList.add('is-saved');
   setTimeout(() => btn.classList.remove('is-saved'), 1200);
+});
+
+document.getElementById('btn-duplicate-pace').addEventListener('click', () => {
+  if (!state.editingPace) return;
+  // Save the original first so any pending edits aren't lost in the original.
+  const original = savePaceFromBuilder();
+  persistPace(original);
+  // Build the copy, persist it, and switch the builder focus to it so the user
+  // is immediately editing the duplicate.
+  const copy = duplicatePace(original);
+  persistPace(copy);
+  openBuilder(copy);
 });
 
 document.getElementById('btn-delete-pace').addEventListener('click', async () => {
