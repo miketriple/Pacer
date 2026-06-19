@@ -67,6 +67,13 @@ export class CueScheduler {
   /**
    * Call from onTick to speak countdown numbers (e.g. "5, 4, 3, 2, 1").
    * Each number is spoken at most once per segment via the fired-cue set.
+   *
+   * Countdown numbers YIELD to anything currently being spoken — the opening
+   * cue (or any user-set extra) takes priority.  The slot for this number is
+   * "use it or lose it": we still mark it fired so the next tick moves on to
+   * the next-lower number rather than retrying this one late.  N seconds left
+   * means "N seconds left"; if the slot is gone, the meaning is gone too.
+   *
    * @param {number} secondsLeft  Fractional seconds remaining.
    * @param {number} threshold    Speak numbers from this value down to 1.
    */
@@ -76,6 +83,7 @@ export class CueScheduler {
       const key = `cd:${n}`;
       if (!this._fired.has(key)) {
         this._fired.add(key);
+        if (this._busy) return;   // yield to in-progress speech
         this._enqueue(String(n), 'high');
       }
     }

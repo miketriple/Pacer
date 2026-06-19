@@ -169,9 +169,9 @@ runtime.timer = new TimerEngine({
     if (!isManual) {
       const tc     = runtime.pace?.transitionCountdown ?? '5';
       const thresh = Number(tc);
-      const segDur = runtime.timer.flatSegments[runtime.timer.segmentIndex]?.duration ?? 0;
-      // Only count down when the step is long enough to make it meaningful
-      if (tc !== 'silent' && segDur > thresh * 2) {
+      // cues.countdown is self-throttling: it yields to in-progress speech
+      // (opening cue or extras) and drops any number whose slot has passed.
+      if (tc !== 'silent') {
         runtime.cues.countdown(secondsLeft, thresh);
       }
       // Segment complete — bypass transition and snap bar to 100% so it

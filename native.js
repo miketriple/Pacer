@@ -41,10 +41,21 @@ export function buildCueSchedule(flatSegments, transitionCountdown, { addComplet
       }
     }
 
-    // Countdown cues — only when the step is long enough to be meaningful
-    if (thresh > 0 && duration > thresh * 2) {
-      for (let n = thresh; n >= 1; n--) {
-        cues.push({ delayMs: offset + (duration - n) * 1000, text: String(n) });
+    // Countdown cues — schedule every number that would fit within the step,
+    // but tag each with skipIfBusy so the opening cue (or any in-progress
+    // speech, including user-set extras) takes priority.  At fire time the
+    // native service checks TTS.isSpeaking() and silently drops the number if
+    // something is still playing.  The next countdown number, 1 second later,
+    // gets its own fresh attempt.  Result: countdown auto-fits in whatever
+    // time remains after higher-priority speech, without any timing math.
+    if (thresh > 0) {
+      const maxN = Math.min(thresh, Math.floor(duration));
+      for (let n = maxN; n >= 1; n--) {
+        cues.push({
+          delayMs: offset + (duration - n) * 1000,
+          text: String(n),
+          skipIfBusy: true,
+        });
       }
     }
 
