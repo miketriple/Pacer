@@ -14,6 +14,7 @@ export class CueScheduler {
     this._speakFn    = null;        // injectable native TTS function (text) => Promise<void>
     this._stopFn     = null;        // injectable native TTS stop function () => Promise<void>
     this._speechToken = 0;          // identifies the active utterance; stale completions are ignored
+    this._currentIsCountdown = false; // is the currently-speaking utterance a countdown number?
   }
 
   // ── Configuration ────────────────────────────────────────────
@@ -69,11 +70,13 @@ export class CueScheduler {
    * Call from onTick to speak countdown numbers (e.g. "5, 4, 3, 2, 1").
    * Each number is spoken at most once per segment via the fired-cue set.
    *
-   * Countdown numbers YIELD to anything currently being spoken — the opening
-   * cue (or any user-set extra) takes priority.  The slot for this number is
-   * "use it or lose it": we still mark it fired so the next tick moves on to
-   * the next-lower number rather than retrying this one late.  N seconds left
-   * means "N seconds left"; if the slot is gone, the meaning is gone too.
+   * Countdown numbers YIELD to a protected cue (the opening instruction or a
+   * user-set extra) that's still speaking — instructions take priority.  But a
+   * countdown does NOT yield to another COUNTDOWN number: "1 second left" is
+   * more accurate than "2 seconds left", so the newer, lower number interrupts
+   * the older one still playing.  The slot is "use it or lose it": we mark it
+   * fired so the next tick moves to the next-lower number rather than retrying
+   * this one late.
    *
    * @param {number} secondsLeft  Fractional seconds remaining.
    * @param {number} threshold    Speak numbers from this value down to 1.
@@ -84,8 +87,11 @@ export class CueScheduler {
       const key = `cd:${n}`;
       if (!this._fired.has(key)) {
         this._fired.add(key);
-        if (this._busy) return;   // yield to in-progress speech
-        this._enqueue(String(n), 'high');
+        // Yield only to a protected (non-countdown) cue.  If a previous
+        // countdown number is still playing, fall through — _enqueue('high')
+        // interrupts it so the more-current number wins.
+        if (this._busy && !this._currentIsCountdown) return;
+        this._enqueue(String(n), 'high', true);
       }
     }
   }
@@ -113,7 +119,7 @@ export class CueScheduler {
 
   // ── Private ──────────────────────────────────────────────────
 
-  _enqueue(text, priority = 'normal') {
+  _enqueue(text, priority = 'normal', isCountdown = false) {
     if (!text) return;
 
     if (priority === 'high') {
@@ -125,9 +131,9 @@ export class CueScheduler {
       }
       this._busy  = false;
       this._queue = this._queue.filter(i => i.priority === 'high');
-      this._queue.unshift({ text, priority });
+      this._queue.unshift({ text, priority, isCountdown });
     } else {
-      this._queue.push({ text, priority });
+      this._queue.push({ text, priority, isCountdown });
     }
 
     this._flush();
@@ -136,8 +142,9 @@ export class CueScheduler {
   _flush() {
     if (this._busy || !this._queue.length) return;
 
-    const { text } = this._queue.shift();
+    const { text, isCountdown } = this._queue.shift();
     this._busy = true;
+    this._currentIsCountdown = isCountdown;
     // Token guards against stale completion callbacks.  When a high-priority cue
     // cancels an in-flight utterance, that utterance's onend/onerror (or the
     // native promise) still fires asynchronously afterward.  Without this guard
