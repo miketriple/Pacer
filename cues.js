@@ -13,6 +13,7 @@ export class CueScheduler {
     this._currentSeg = null;
     this._speakFn    = null;        // injectable native TTS function (text) => Promise<void>
     this._stopFn     = null;        // injectable native TTS stop function () => Promise<void>
+    this._speechToken = 0;          // identifies the active utterance; stale completions are ignored
   }
 
   // ── Configuration ────────────────────────────────────────────
@@ -103,6 +104,7 @@ export class CueScheduler {
     } else {
       window.speechSynthesis?.cancel();
     }
+    this._speechToken++;   // invalidate any in-flight utterance's pending completion
     this._queue      = [];
     this._busy       = false;
     this._fired.clear();
@@ -136,12 +138,18 @@ export class CueScheduler {
 
     const { text } = this._queue.shift();
     this._busy = true;
+    // Token guards against stale completion callbacks.  When a high-priority cue
+    // cancels an in-flight utterance, that utterance's onend/onerror (or the
+    // native promise) still fires asynchronously afterward.  Without this guard
+    // it would clobber _busy=false even though a newer utterance is now active —
+    // which let countdown numbers enqueue and play late behind the new cue
+    // (Chrome's documented cancel/onend race, confirmed in the box-breathing logs).
+    const myToken = ++this._speechToken;
+    const done    = () => { if (myToken === this._speechToken) { this._busy = false; this._flush(); } };
 
     if (this._speakFn) {
       // Native TTS path — chains via Promise resolution
-      this._speakFn(text)
-        .then(()  => { this._busy = false; this._flush(); })
-        .catch(() => { this._busy = false; this._flush(); });
+      this._speakFn(text).then(done, done);
       return;
     }
 
@@ -159,8 +167,8 @@ export class CueScheduler {
       if (voice) u.voice = voice;
     }
 
-    u.onend   = () => { this._busy = false; this._flush(); };
-    u.onerror = () => { this._busy = false; this._flush(); };
+    u.onend   = done;
+    u.onerror = done;
     synth.speak(u);
   }
 }
