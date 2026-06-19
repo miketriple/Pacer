@@ -114,22 +114,35 @@ runtime.timer = new TimerEngine({
       const isManual = (seg.duration || 0) === 0;
 
       if (isManual) {
-        // Manual step — fire its opening cue (and any timed extra cues) now.
-        const openingText = seg.voiceCues?.[0]?.text || seg.name;
-        const extraCues   = (seg.voiceCues || []).slice(1)
-          .filter(c => c.text)
-          .map(c => ({ delayMs: c.offsetSeconds * 1000, text: c.text }));
-        const cueList = openingText
-          ? [{ delayMs: 0, text: openingText }, ...extraCues]
-          : extraCues;
-        if (cueList.length > 0) {
-          runtime.cueSchedule  = cueList;
-          runtime.chunkStartMs = Date.now();
+        // Did we get here by natural advance from a timed step?  If so, the
+        // manual step's opening cue (and any extras) were pre-scheduled at the
+        // tail of the previous chunk — firing them again here would duplicate
+        // the audio.  The chunk has already done its job; we just clear the
+        // local cueSchedule reference so pause/resume math has nothing stale.
+        const prevWasTimed = idx > 0 && (prevSeg?.duration || 0) > 0;
+        if (prevWasTimed && !runtime.isUserJumping) {
+          runtime.cueSchedule  = null;
+          runtime.chunkStartMs = 0;
           runtime.pausedAtMs   = 0;
-          console.log('[Pacer] manual step cue:', openingText);
-          startNativeTimerWithSchedule(cueList, runtime.pace?.name || 'Pacer');
         } else {
-          runtime.cueSchedule = null;
+          // First step of pace, back-to-back manual, or user-jumped to a manual
+          // — no preceding chunk pre-scheduled this cue, so fire it from JS now.
+          const openingText = seg.voiceCues?.[0]?.text || seg.name;
+          const extraCues   = (seg.voiceCues || []).slice(1)
+            .filter(c => c.text)
+            .map(c => ({ delayMs: c.offsetSeconds * 1000, text: c.text }));
+          const cueList = openingText
+            ? [{ delayMs: 0, text: openingText }, ...extraCues]
+            : extraCues;
+          if (cueList.length > 0) {
+            runtime.cueSchedule  = cueList;
+            runtime.chunkStartMs = Date.now();
+            runtime.pausedAtMs   = 0;
+            console.log('[Pacer] manual step cue:', openingText);
+            startNativeTimerWithSchedule(cueList, runtime.pace?.name || 'Pacer');
+          } else {
+            runtime.cueSchedule = null;
+          }
         }
       } else if (runtime.isUserJumping || (idx > 0 && (prevSeg?.duration || 0) === 0)) {
         // User jumped to a timed step (or naturally advanced from a manual step)

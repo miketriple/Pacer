@@ -67,6 +67,14 @@ export function buildCueSchedule(flatSegments, transitionCountdown, { addComplet
  * manual step and the completion cue is suppressed — the caller restarts a
  * new chunk when the user taps through each manual step.
  *
+ * When the chunk ends at a manual step, the manual step's opening cue (and
+ * any extra voice cues at fixed offsets within it) are appended to the chunk
+ * at the manual step's start moment.  This way the native scheduler fires
+ * those cues at the correct wall-clock time even if JS is throttled by a
+ * screen lock at the chunk boundary.  When the user later taps Done on the
+ * manual step, the next chunk's `scheduleCues` call cancels any pending
+ * unfired extras before scheduling its own.
+ *
  * @param {object[]} flatSegments        - full flat segment list
  * @param {number}   startIdx            - index to begin from (0 for full pace)
  * @param {string}   transitionCountdown - '3', '5', or 'silent'
@@ -77,7 +85,30 @@ export function buildNativeChunk(flatSegments, startIdx, transitionCountdown) {
   const nextManualIdx   = remaining.findIndex(s => (s.duration || 0) === 0);
   const isFinalChunk    = nextManualIdx === -1;   // no more manual steps ahead
   const chunk           = isFinalChunk ? remaining : remaining.slice(0, nextManualIdx);
-  return buildCueSchedule(chunk, transitionCountdown, { addCompletionCue: isFinalChunk });
+  const cues            = buildCueSchedule(chunk, transitionCountdown, { addCompletionCue: isFinalChunk });
+
+  // Append the trailing manual step's cues at the chunk's end so they fire
+  // natively even if the screen is locked at the timed→manual boundary.
+  // Skip when the chunk has no timed segments (i.e. startIdx itself is manual);
+  // in that case JS-side onSegmentStart handles the manual cues directly.
+  if (!isFinalChunk && chunk.length > 0) {
+    const manualStartMs = chunk.reduce((s, seg) => s + (seg.duration || 0), 0) * 1000;
+    const manualStep    = remaining[nextManualIdx];
+    const openingText   = manualStep.voiceCues?.[0]?.text || manualStep.name;
+    if (openingText) {
+      cues.push({ delayMs: manualStartMs, text: openingText });
+    }
+    // Extra voice cues at fixed offsets within the manual step.  If the user
+    // taps Done before one of these fires, the next chunk's scheduleCues
+    // cancels the pending entry before scheduling its own.
+    (manualStep.voiceCues || []).slice(1).forEach(c => {
+      if (c.text) {
+        cues.push({ delayMs: manualStartMs + c.offsetSeconds * 1000, text: c.text });
+      }
+    });
+  }
+
+  return cues.sort((a, b) => a.delayMs - b.delayMs);
 }
 
 /**
