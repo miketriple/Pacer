@@ -50,7 +50,12 @@ const state = {
   },
 };
 
+// Ids of paces deleted locally whose server DELETE hasn't confirmed yet, and
+// ids of paces with local edits/creates whose server PUT hasn't confirmed yet.
+// Both are persisted (see save/loadSyncState) so an offline change survives a
+// reload and can't be silently clobbered by the next successful GET sync.
 const pendingDeletes = new Set();
+const dirtyPaces     = new Set();
 
 // True while the user is in Edit mode on the home screen.  In this mode,
 // pace cards show ↑ ↓ ⎘ controls and tapping a card does NOT open the builder
@@ -273,6 +278,45 @@ function saveLocalPaces() {
   localStorage.setItem('pacer_paces', JSON.stringify(state.paces));
 }
 
+// ── Pending-sync bookkeeping ─────────────────────────────────
+
+function saveSyncState() {
+  localStorage.setItem('pacer_dirty',           JSON.stringify([...dirtyPaces]));
+  localStorage.setItem('pacer_pending_deletes',  JSON.stringify([...pendingDeletes]));
+}
+
+function loadSyncState() {
+  try { JSON.parse(localStorage.getItem('pacer_dirty')          || '[]').forEach(id => dirtyPaces.add(id)); }    catch (e) {}
+  try { JSON.parse(localStorage.getItem('pacer_pending_deletes') || '[]').forEach(id => pendingDeletes.add(id)); } catch (e) {}
+}
+
+function markDirty(id)  { dirtyPaces.add(id);    saveSyncState(); refreshSyncStatus(); }
+function clearDirty(id) { dirtyPaces.delete(id); saveSyncState(); refreshSyncStatus(); }
+
+function unsyncedCount() { return dirtyPaces.size + pendingDeletes.size; }
+
+/** Show a persistent "N changes not synced" indicator when offline edits are
+ *  pending, or clear it when everything is synced. */
+function refreshSyncStatus() {
+  const n = unsyncedCount();
+  if (n > 0) setSyncStatus(`${n} change${n !== 1 ? 's' : ''} not synced`, 'error');
+  else       setSyncStatus('', '');
+}
+
+/** Re-attempt every pending delete and dirty PUT.  Called after a successful
+ *  GET sync (we know the network is up). Each success clears its pending flag. */
+async function retryPendingSync() {
+  for (const id of [...pendingDeletes]) {
+    try { await apiRequest('DELETE', `/workouts/${id}`); pendingDeletes.delete(id); } catch (e) {}
+  }
+  for (const id of [...dirtyPaces]) {
+    const pace = state.paces.find(p => p.id === id);
+    if (!pace) { dirtyPaces.delete(id); continue; }   // dirty id we no longer hold — drop it
+    try { await apiRequest('PUT', `/workouts/${id}`, pace); dirtyPaces.delete(id); } catch (e) {}
+  }
+  saveSyncState();
+}
+
 async function apiRequest(method, path, body = null) {
   if (!state.settings.apiUrl || !state.settings.apiKey) throw new Error('API not configured');
   const url  = state.settings.apiUrl.replace(/\/$/, '') + path;
@@ -287,14 +331,30 @@ async function syncPaces() {
   if (!state.settings.apiUrl || !state.settings.apiKey) return;
   setSyncStatus('Syncing…');
   try {
-    const data    = await apiRequest('GET', '/workouts');
-    state.paces   = (data.workouts || data)
+    const data        = await apiRequest('GET', '/workouts');
+    const serverPaces = (data.workouts || data)
       .filter(p => !pendingDeletes.has(p.id))
       .map(migratePace);
+
+    // Merge: the server is the source of truth EXCEPT for paces with unsynced
+    // local changes. For a dirty id we keep the LOCAL copy, so a failed PUT (an
+    // edit or a brand-new pace made while offline) can't be silently overwritten
+    // by the server's older — or missing — version.
+    const merged = serverPaces.filter(p => !dirtyPaces.has(p.id));
+    for (const id of dirtyPaces) {
+      const local = state.paces.find(p => p.id === id);
+      if (local) merged.push(local);
+      else       dirtyPaces.delete(id);   // dirty id we no longer hold — drop it
+    }
+    state.paces = merged;
     ensurePaceOrder(state.paces);
     saveLocalPaces();
-    setSyncStatus('Synced', 'ok');
     renderPaceList();
+
+    // Network is up — push everything that was waiting, then reflect the result.
+    await retryPendingSync();
+    if (unsyncedCount() === 0) setSyncStatus('Synced', 'ok');
+    else                       refreshSyncStatus();
   } catch (e) {
     setSyncStatus('Offline — using local data', 'error');
   }
@@ -318,15 +378,20 @@ async function persistPace(pace) {
   }
   saveLocalPaces();
   renderPaceList();
-  try { await apiRequest('PUT', `/workouts/${pace.id}`, pace); } catch (e) {}
+  try { await apiRequest('PUT', `/workouts/${pace.id}`, pace); clearDirty(pace.id); }
+  catch (e) { markDirty(pace.id); }   // remember the unsynced edit so sync won't clobber it
 }
 
 async function deletePace(id) {
   pendingDeletes.add(id);
+  dirtyPaces.delete(id);   // a deleted pace shouldn't also linger as a dirty edit
   state.paces = state.paces.filter(p => p.id !== id);
   saveLocalPaces();
+  saveSyncState();
   renderPaceList();
-  try { await apiRequest('DELETE', `/workouts/${id}`); pendingDeletes.delete(id); } catch (e) {}
+  try { await apiRequest('DELETE', `/workouts/${id}`); pendingDeletes.delete(id); saveSyncState(); }
+  catch (e) {}
+  refreshSyncStatus();
 }
 
 /**
@@ -371,7 +436,10 @@ async function _swapAdjacentPace(paceId, delta) {
   saveLocalPaces();
   renderPaceList();
   // Fire both PUTs concurrently — they're independent and we don't block UI on them.
-  [a, b].forEach(p => apiRequest('PUT', `/workouts/${p.id}`, p).catch(() => {}));
+  // A failure marks the pace dirty so the new order isn't lost on the next sync.
+  [a, b].forEach(p => apiRequest('PUT', `/workouts/${p.id}`, p)
+    .then(() => clearDirty(p.id))
+    .catch(() => markDirty(p.id)));
 }
 
 const movePaceUp   = id => _swapAdjacentPace(id, -1);
@@ -1319,10 +1387,12 @@ async function initPlatform() {
 
 async function init() {
   loadSettings();
+  loadSyncState();   // restore pending deletes / dirty-pace ids before any sync
   applyTheme(state.settings.theme);
   applyMode(state.settings.mode);
   state.paces = loadLocalPaces();
   renderPaceList();
+  refreshSyncStatus();
   await loadTemplates();
   await initPlatform();
   runtime.cues.setVoice(state.settings.voiceName);

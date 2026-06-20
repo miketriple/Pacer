@@ -3,11 +3,13 @@
   "version": "1.0.0",
   "private": true,
   "description": "Guided rhythm for any workflow",
+  "type": "module",
   "scripts": {
-    "build":     "node build.js",
-    "cap:sync":  "node build.js && cap sync android",
-    "cap:run":   "node build.js && cap run android",
-    "cap:open":  "cap open android"
+    "build":     "node build.cjs",
+    "cap:sync":  "node build.cjs && cap sync android",
+    "cap:run":   "node build.cjs && cap run android",
+    "cap:open":  "cap open android",
+    "test":      "node --test \"test/**/*.test.js\""
   },
   "dependencies": {
     "@capacitor/core": "^8.0.0"

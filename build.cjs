@@ -1,11 +1,15 @@
 #!/usr/bin/env node
 /* ============================================================
-   build.js — Pacer asset bundler for Capacitor.
+   build.cjs — Pacer asset bundler for Capacitor.
    Copies web assets to www/ and injects the capacitor.js shim
    into index.html so Capacitor plugins are available at runtime.
 
+   CommonJS (.cjs) on purpose: package.json sets "type":"module" so the app
+   source can be ES modules (and unit-testable under `node --test`), while this
+   build script keeps using require()/__dirname via the .cjs extension.
+
    Usage:
-     node build.js          # copy assets → www/
+     node build.cjs         # copy assets → www/
      npm run cap:sync       # build + cap sync android
      npm run cap:run        # build + cap run android (device/emulator)
    ============================================================ */

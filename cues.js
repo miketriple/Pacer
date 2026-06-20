@@ -1,7 +1,7 @@
 /* ============================================================
    cues.js — Voice cue scheduler.
    Queues speech utterances, prevents duplicates, handles
-   high-priority interrupts (countdowns), and cleans up gracefully.
+   protected/countdown priority, and cleans up gracefully.
    ============================================================ */
 
 export class CueScheduler {
@@ -47,7 +47,7 @@ export class CueScheduler {
     this._currentSeg = seg;
     const cue  = seg.voiceCues?.[0];
     const text = cue?.text ? cue.text : seg.name;
-    if (text) this._enqueue(text, 'high');
+    if (text) this._enqueue(text);   // opening cue — protected
   }
 
   /**
@@ -70,13 +70,11 @@ export class CueScheduler {
    * Call from onTick to speak countdown numbers (e.g. "5, 4, 3, 2, 1").
    * Each number is spoken at most once per segment via the fired-cue set.
    *
-   * Countdown numbers YIELD to a protected cue (the opening instruction or a
-   * user-set extra) that's still speaking — instructions take priority.  But a
-   * countdown does NOT yield to another COUNTDOWN number: "1 second left" is
-   * more accurate than "2 seconds left", so the newer, lower number interrupts
-   * the older one still playing.  The slot is "use it or lose it": we mark it
-   * fired so the next tick moves to the next-lower number rather than retrying
-   * this one late.
+   * A countdown number fires ONLY when nothing is currently speaking.  If
+   * anything is in progress — a protected cue OR another countdown number — this
+   * number is skipped (and marked fired so the next tick moves to the next-lower
+   * number).  A countdown spoken late would be misleading, so we drop it rather
+   * than play it behind schedule or interrupt another number.
    *
    * @param {number} secondsLeft  Fractional seconds remaining.
    * @param {number} threshold    Speak numbers from this value down to 1.
@@ -87,20 +85,17 @@ export class CueScheduler {
       const key = `cd:${n}`;
       if (!this._fired.has(key)) {
         this._fired.add(key);
-        // Yield only to a protected (non-countdown) cue.  If a previous
-        // countdown number is still playing, fall through — _enqueue('high')
-        // interrupts it so the more-current number wins.
-        if (this._busy && !this._currentIsCountdown) return;
-        this._enqueue(String(n), 'high', true);
+        if (this._busy) return;   // anything speaking → skip; never late, never interrupting
+        this._enqueue(String(n), true);
       }
     }
   }
 
   // ── Direct speech ────────────────────────────────────────────
 
-  /** Speak arbitrary text at high priority (interrupts normal-priority queue). */
+  /** Speak arbitrary text as a protected cue (e.g. the completion announcement). */
   speak(text) {
-    this._enqueue(text, 'high');
+    this._enqueue(text);
   }
 
   /** Cancel everything and silence the synthesiser. */
@@ -119,23 +114,29 @@ export class CueScheduler {
 
   // ── Private ──────────────────────────────────────────────────
 
-  _enqueue(text, priority = 'normal', isCountdown = false) {
+  /**
+   * Queue a cue for speech under the protected/countdown priority model:
+   *
+   *   Protected cue (opening, extra, completion — isCountdown=false): takes
+   *   priority. If a COUNTDOWN number is currently speaking, cancel it so this
+   *   cue takes over. If a PROTECTED cue is speaking, queue behind it (FIFO) —
+   *   protected cues never cut each other off.
+   *
+   *   Countdown number (isCountdown=true): only ever reaches here when
+   *   countdown() has confirmed silence, so it simply speaks. Countdowns never
+   *   interrupt and never sit queued behind anything.
+   */
+  _enqueue(text, isCountdown = false) {
     if (!text) return;
 
-    if (priority === 'high') {
-      // Cancel whatever is speaking now, drop queued normal-priority items
-      if (this._stopFn) {
-        this._stopFn().catch(() => {});
-      } else {
-        window.speechSynthesis?.cancel();
-      }
-      this._busy  = false;
-      this._queue = this._queue.filter(i => i.priority === 'high');
-      this._queue.unshift({ text, priority, isCountdown });
-    } else {
-      this._queue.push({ text, priority, isCountdown });
+    if (!isCountdown && this._busy && this._currentIsCountdown) {
+      // Protected cue supersedes a countdown number that's mid-word.
+      if (this._stopFn) this._stopFn().catch(() => {});
+      else              window.speechSynthesis?.cancel();
+      this._busy = false;   // the cancelled utterance's stale completion is ignored via _speechToken
     }
 
+    this._queue.push({ text, isCountdown });
     this._flush();
   }
 
