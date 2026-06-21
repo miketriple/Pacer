@@ -347,21 +347,33 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
 }
 
 .timer-header { border-bottom:1px solid var(--border); }
-.timer-body { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:20px 24px; text-align:center; }
-.timer-pace-name { font-family:'Barlow Condensed',sans-serif; font-weight:500; font-size:14px; letter-spacing:.12em; text-transform:uppercase; color:var(--text-muted); margin-bottom:6px; }
-.timer-phase-label { font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:16px; letter-spacing:.08em; text-transform:uppercase; color:var(--text-muted); margin-bottom:8px; min-height:22px; }
-.timer-clock { font-family:'Share Tech Mono',monospace; font-size:clamp(72px,22vw,110px); color:var(--accent); text-shadow:0 0 40px var(--accent-glow),0 0 80px var(--accent-glow); line-height:1; letter-spacing:-.02em; }
+.timer-pace-name { font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:15px; letter-spacing:.08em; color:var(--text); }
+.timer-end-btn { color:var(--text-muted); }
+.timer-end-btn:hover, .timer-end-btn:active { background:rgba(255,80,80,.12); color:#ff5a5a; }
+.timer-body { flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; padding:16px 24px; text-align:center; }
+.timer-phase-label { font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:12px; letter-spacing:.14em; text-transform:uppercase; color:var(--text-muted); margin-bottom:10px; min-height:16px; }
+.timer-step-name { font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:clamp(22px,6vw,28px); letter-spacing:.02em; color:var(--text); margin:0 0 16px; min-height:30px; }
+
+/* Circular ring timer — the hero. The SVG is rotated -90° so the depleting arc
+   starts at 12 o'clock; the clock overlay sits centered, outside the SVG so it
+   isn't rotated. The fill ring uses the primary accent; the arc length is driven
+   by stroke-dashoffset in updateTimerDisplay (full at step start → empty at end). */
+.timer-ring-wrap { position:relative; width:clamp(200px,64vw,236px); aspect-ratio:1; margin:0 auto 18px; }
+.timer-ring { width:100%; height:100%; display:block; transform:rotate(-90deg); }
+.timer-ring-track { fill:none; stroke:var(--surface2); stroke-width:6; }
+.timer-ring-fill { fill:none; stroke:var(--accent); stroke-width:6; stroke-linecap:round; stroke-dasharray:578.05; stroke-dashoffset:0; transition:stroke-dashoffset .26s linear; }
+.timer-clock-overlay { position:absolute; inset:0; display:flex; flex-direction:column; align-items:center; justify-content:center; }
+.timer-clock { font-family:'Share Tech Mono',monospace; font-size:clamp(44px,13vw,58px); color:var(--text); line-height:1; letter-spacing:.01em; }
 .timer-clock.paused { animation:pausedBlink 1.2s ease-in-out infinite; }
-@keyframes pausedBlink { 0%,100%{opacity:.5}50%{opacity:.2} }
-.timer-step-name { font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:22px; letter-spacing:.04em; color:var(--text); margin:12px 0 16px; min-height:28px; }
-.timer-progress-wrap { width:100%; max-width:340px; margin-bottom:10px; }
-.timer-progress-bar { height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; }
-.timer-progress-fill { height:100%; background:var(--accent2); border-radius:2px; box-shadow:0 0 8px var(--accent-glow); transition:width 0.26s linear; width:0%; }
-.timer-overall-progress { display:flex; gap:5px; justify-content:center; flex-wrap:wrap; max-width:300px; margin:8px auto; min-height:10px; }
+@keyframes pausedBlink { 0%,100%{opacity:.55}50%{opacity:.2} }
+.timer-clock-sub { font-size:12px; color:var(--text-muted); margin-top:7px; letter-spacing:.04em; min-height:14px; }
+
+.timer-cue-text { font-size:14px; color:var(--text); opacity:.78; line-height:1.4; max-width:300px; margin:0 auto 16px; min-height:20px; }
+.timer-overall-progress { display:flex; gap:5px; justify-content:center; flex-wrap:wrap; max-width:280px; margin:0 auto 10px; min-height:7px; }
 .overall-dot { width:7px; height:7px; border-radius:50%; background:var(--surface3); transition:background var(--transition); }
-.overall-dot.done { background:var(--accent2); opacity:.5; }
+.overall-dot.done { background:var(--accent2); opacity:.55; }
 .overall-dot.active { background:var(--accent); }
-.timer-next { font-size:13px; color:var(--text-muted); margin-top:6px; }
+.timer-next { font-size:12px; color:var(--text-muted); opacity:.7; letter-spacing:.02em; }
 .timer-controls { display:flex; justify-content:center; gap:10px; padding:12px 16px calc(16px + var(--safe-bottom)); border-top:1px solid var(--border); background:var(--bg); flex-shrink:0; }
 
 /* ============================================================

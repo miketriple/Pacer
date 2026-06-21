@@ -109,26 +109,28 @@
   <!-- TIMER -->
   <div id="screen-timer" class="screen">
     <header class="app-header timer-header">
-      <div class="logo-small">PACER</div>
-      <button class="text-btn danger-text" id="btn-end-pace">End</button>
+      <div class="timer-pace-name" id="timer-pace-name"></div>
+      <button class="icon-btn timer-end-btn" id="btn-end-pace" aria-label="End pace" title="End pace">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+      </button>
     </header>
     <div class="timer-body">
-      <div class="timer-pace-name" id="timer-pace-name"></div>
       <div class="timer-phase-label" id="timer-phase-label"></div>
-      <div class="timer-clock-wrap">
-        <div class="timer-clock" id="timer-clock">00:00</div>
-      </div>
       <div class="timer-step-name" id="timer-step-name"></div>
-      <div class="timer-progress-wrap">
-        <div class="timer-progress-bar">
-          <div class="timer-progress-fill" id="timer-progress-fill"></div>
+      <div class="timer-ring-wrap">
+        <svg class="timer-ring" viewBox="0 0 210 210" aria-hidden="true">
+          <circle class="timer-ring-track" cx="105" cy="105" r="92"></circle>
+          <circle class="timer-ring-fill" id="timer-ring-fill" cx="105" cy="105" r="92"></circle>
+        </svg>
+        <div class="timer-clock-overlay">
+          <div class="timer-clock" id="timer-clock">00:00</div>
+          <div class="timer-clock-sub" id="timer-clock-sub"></div>
         </div>
       </div>
+      <div class="timer-cue-text" id="timer-cue-text"></div>
       <div class="timer-overall-progress" id="timer-overall-progress"></div>
       <div class="timer-next" id="timer-next"></div>
-      <button class="btn-manual-next" id="btn-manual-next" style="display:none">
-        Done — Next Step
-      </button>
+      <button class="btn-manual-next" id="btn-manual-next" style="display:none">Done — Next Step</button>
     </div>
     <div class="timer-controls">
       <button class="btn btn-secondary btn-icon" id="btn-prev-step" aria-label="Previous step" title="Previous step"><svg class="icon-svg" viewBox="0 0 24 24" aria-hidden="true"><path d="M6 6h2v12H6zm3.5 6l8.5 6V6z"/></svg></button>

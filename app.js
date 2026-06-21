@@ -62,6 +62,10 @@ const dirtyPaces     = new Set();
 // (so an accidental tap mid-edit can't start a pace).
 let reorderMode = false;
 
+// Circumference of the timer ring (2π·r with r=92 in the SVG viewBox).
+// updateTimerDisplay sets stroke-dashoffset between 0 (full ring) and RING_C (empty).
+const RING_C = 578.05;
+
 // ============================================================
 // 3. RUNTIME — per-pace running state
 // ============================================================
@@ -103,12 +107,13 @@ runtime.timer = new TimerEngine({
 
   onSegmentStart(seg, idx) {
     runtime.cues.arm(seg);
-    // Snap bar to 0% without transition so it doesn't animate back from 100%.
-    // Restore the transition one frame later so the new segment's ticks animate normally.
-    const fill = document.getElementById('timer-progress-fill');
-    fill.style.transition = 'none';
-    updateTimerDisplay();                                          // sets width to 0%
-    requestAnimationFrame(() => { fill.style.transition = ''; }); // restore
+    // Snap the ring to full (offset 0) without transition so it doesn't animate
+    // from the previous segment's depleted state; restore the transition one
+    // frame later so this segment's ticks deplete it smoothly.
+    const ring = document.getElementById('timer-ring-fill');
+    ring.style.transition = 'none';
+    updateTimerDisplay();                                          // sets ring to full
+    requestAnimationFrame(() => { ring.style.transition = ''; }); // restore
     animatePhaseTransition();
 
     // Native timer: route all audio through Android TTS because Web Speech API
@@ -179,12 +184,12 @@ runtime.timer = new TimerEngine({
       if (tc !== 'silent') {
         runtime.cues.countdown(secondsLeft, thresh);
       }
-      // Segment complete — bypass transition and snap bar to 100% so it
-      // visually reaches the right edge before the next segment resets it.
+      // Segment complete — bypass transition and snap the ring to empty so it
+      // visually depletes fully before the next segment resets it to full.
       if (secondsLeft <= 0) {
-        const fill = document.getElementById('timer-progress-fill');
-        fill.style.transition = 'none';
-        fill.style.width = '100%';
+        const ring = document.getElementById('timer-ring-fill');
+        ring.style.transition = 'none';
+        ring.style.strokeDashoffset = RING_C;
         return;
       }
     }
@@ -1012,27 +1017,33 @@ function updateTimerDisplay(tickData = null) {
   document.getElementById('timer-phase-label').textContent = phaseLabel;
   document.getElementById('timer-step-name').textContent   = seg.name || '';
 
-  const clockEl    = document.getElementById('timer-clock');
-  const manualBtn  = document.getElementById('btn-manual-next');
-  const pauseBtn   = document.getElementById('btn-pause-resume');
-  const progressEl = document.getElementById('timer-progress-fill');
+  // Voice-cue text below the ring — shown only when it adds information beyond
+  // the step name (so an identical name + opening cue isn't duplicated).
+  const cueText = (seg.voiceCues?.[0]?.text || '').trim();
+  document.getElementById('timer-cue-text').textContent =
+    (cueText && cueText !== (seg.name || '').trim()) ? cueText : '';
+
+  const clockEl  = document.getElementById('timer-clock');
+  const subEl    = document.getElementById('timer-clock-sub');
+  const manualBtn = document.getElementById('btn-manual-next');
+  const ringFill = document.getElementById('timer-ring-fill');
 
   if (isManual) {
-    clockEl.textContent    = formatTime(elapsedInSeg);
-    clockEl.style.fontSize = 'clamp(28px, 8vw, 42px)';
-    clockEl.classList.remove('paused');
+    // Count UP, calm full ring, show the "Done — Next Step" button.
+    clockEl.textContent = formatTime(elapsedInSeg);
+    subEl.textContent   = 'elapsed';
+    ringFill.style.strokeDashoffset = 0;
     if (manualBtn) manualBtn.style.display = 'flex';
-    progressEl.style.width = '0%';
   } else {
-    clockEl.style.fontSize = '';
     if (manualBtn) manualBtn.style.display = 'none';
-    // Ceil keeps the clock at "N" for the full Nth second — changes at clean
-    // whole-second boundaries rather than at 0.5-second marks (Math.round).
-    // The bar uses raw float elapsed so it moves smoothly and independently.
-    const displaySeconds   = Math.max(0, Math.ceil(secondsLeft));
-    clockEl.textContent    = formatTime(displaySeconds);
-    progressEl.style.width =
-      `${seg.duration > 0 ? Math.min(100, (elapsedInSeg / seg.duration) * 100) : 100}%`;
+    // Ceil keeps the clock at "N" for the full Nth second — changes on clean
+    // whole-second boundaries rather than at 0.5 s marks. The ring uses raw
+    // float elapsed so it depletes smoothly and independently.
+    const displaySeconds = Math.max(0, Math.ceil(secondsLeft));
+    clockEl.textContent  = formatTime(displaySeconds);
+    subEl.textContent    = 'of ' + formatTime(seg.duration);
+    const frac = seg.duration > 0 ? Math.min(1, elapsedInSeg / seg.duration) : 1;
+    ringFill.style.strokeDashoffset = RING_C * frac;   // 0 = full, RING_C = empty
   }
 
   document.querySelectorAll('.overall-dot').forEach((dot, i) => {
@@ -1043,7 +1054,7 @@ function updateTimerDisplay(tickData = null) {
 
   const next = runtime.timer.flatSegments[idx + 1];
   document.getElementById('timer-next').textContent = next
-    ? `Next: ${next.name}${next.duration > 0 ? ' · ' + formatTime(next.duration) : ' · On Tap'}`
+    ? `Up next · ${next.name}${next.duration > 0 ? ' · ' + formatTime(next.duration) : ' · On Tap'}`
     : 'Final step';
 }
 
