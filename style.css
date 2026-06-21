@@ -359,19 +359,16 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
    isn't rotated. The fill ring uses the primary accent; the arc length is driven
    by stroke-dashoffset in updateTimerDisplay (full at step start → empty at end). */
 .timer-ring-wrap { position:relative; width:clamp(200px,64vw,236px); aspect-ratio:1; margin:0 auto 18px; }
-/* Faint dashed rings just outside the progress ring, rotating slowly in opposite
-   directions — an ambient flourish that breathes around the steady frame. They
-   animate only while the timer screen is active, so nothing spins in the
-   background. */
-.decor-ring-svg { position:absolute; inset:0; width:100%; height:100%; transform-origin:center; pointer-events:none; }
-.decor-ring-svg circle { fill:none; stroke-width:1; }
-.decor-1 { opacity:.16; }
-.decor-1 circle { stroke:var(--accent); stroke-dasharray:6 13; }
-.decor-2 { opacity:.11; }
-.decor-2 circle { stroke:var(--accent2); stroke-dasharray:2 16; }
-#screen-timer.active .decor-1 { animation:decorSpin 38s linear infinite; }
-#screen-timer.active .decor-2 { animation:decorSpin 54s linear infinite reverse; }
-@keyframes decorSpin { to { transform:rotate(360deg); } }
+/* Wavy decorative rings just outside the progress ring. The path data + opacity
+   are generated each frame by the ringFx loop in app.js (only while the timer is
+   on screen): subtle and faint at rest, swelling larger and brighter for a beat
+   whenever a cue is spoken or a step changes, then easing back to calm. */
+.decor-ring-svg { position:absolute; inset:0; width:100%; height:100%; pointer-events:none; }
+.decor-ring-svg path { fill:none; stroke-width:1.5; stroke-linejoin:round; }
+.decor-1 { opacity:.14; }
+.decor-1 path { stroke:var(--accent); }
+.decor-2 { opacity:.10; }
+.decor-2 path { stroke:var(--accent2); }
 .timer-ring { position:relative; z-index:1; width:100%; height:100%; display:block; transform:rotate(-90deg); }
 .timer-ring-track { fill:none; stroke:var(--surface2); stroke-width:6; }
 .timer-ring-fill { fill:none; stroke:var(--accent); stroke-width:6; stroke-linecap:round; stroke-dasharray:578.05; stroke-dashoffset:0; transition:stroke-dashoffset .26s linear; }

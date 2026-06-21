@@ -115,6 +115,7 @@ runtime.timer = new TimerEngine({
     updateTimerDisplay();                                          // sets ring to full
     requestAnimationFrame(() => { ring.style.transition = ''; }); // restore
     animatePhaseTransition();
+    boostRingFx(1.0);                                              // full swell on a step change
 
     // Native timer: route all audio through Android TTS because Web Speech API
     // is unreliable in the Capacitor WebView.
@@ -199,6 +200,7 @@ runtime.timer = new TimerEngine({
 
   onComplete(totalElapsedSeconds) {
     runtime.cues.speak('Pace complete. Well done!');
+    stopRingFx();
     document.getElementById('complete-name').textContent = runtime.pace?.name || '';
     document.getElementById('complete-time').textContent = 'Total: ' + formatTime(totalElapsedSeconds);
     showScreen('complete');
@@ -981,6 +983,7 @@ function startPace(pace) {
   document.getElementById('timer-pace-name').textContent = pace.name || 'Pacer';
   buildOverallDots(flat.length);
   showScreen('timer');
+  startRingFx();                 // begin the reactive ring animation loop
   runtime.timer.start(flat);
 
   if (window.Capacitor?.isNativePlatform()) {
@@ -1082,6 +1085,52 @@ function animatePhaseTransition() {
   });
 }
 
+// ── Reactive wavy decoration rings ────────────────────────────
+// Two faint wavy rings around the timer: subtle and calm at rest, but each
+// spoken cue or step change injects "energy" that swells the wave amplitude and
+// brightens them for a beat, then decays back to calm. A single RAF loop drives
+// both rings, and runs only while the timer screen is active.
+const ringFx = {
+  raf: 0,
+  t: 0,        // time accumulator (≈ seconds) for slow drift + resting breath
+  energy: 0,   // 0 calm → 1 energized; spikes on events, decays each frame
+  rings: [
+    { id: 'decor-wave-1', r: 99,  waves: 7, baseAmp: 1.4, boostAmp: 5.5, baseOp: .14, boostOp: .55, drift:  0.16, breath: 0.9 },
+    { id: 'decor-wave-2', r: 103, waves: 9, baseAmp: 1.1, boostAmp: 4.0, baseOp: .10, boostOp: .40, drift: -0.11, breath: 1.3 },
+  ],
+};
+
+// Build a closed wavy-ring path: radius oscillates as amp·sin(waves·θ + phase).
+function wavePath(r, waves, amp, phase) {
+  const STEPS = 84, c = 105;
+  let d = 'M';
+  for (let i = 0; i <= STEPS; i++) {
+    const a  = (i / STEPS) * Math.PI * 2;
+    const rr = r + amp * Math.sin(waves * a + phase);
+    d += `${i ? 'L' : ''}${(c + rr * Math.cos(a)).toFixed(1)},${(c + rr * Math.sin(a)).toFixed(1)}`;
+  }
+  return d + 'Z';
+}
+
+function ringFxFrame() {
+  ringFx.t += 0.016;
+  ringFx.energy = ringFx.energy < 0.002 ? 0 : ringFx.energy * 0.93;   // ease back to calm
+  const e = ringFx.energy;
+  for (const ring of ringFx.rings) {
+    const el = document.getElementById(ring.id);
+    if (!el) continue;
+    const breathe = 0.5 * Math.sin(ringFx.t * ring.breath);            // gentle life at rest
+    const amp     = ring.baseAmp + breathe + (ring.boostAmp - ring.baseAmp) * e;
+    el.setAttribute('d', wavePath(ring.r, ring.waves, amp, ringFx.t * ring.drift));
+    el.parentElement.style.opacity = (ring.baseOp + (ring.boostOp - ring.baseOp) * e).toFixed(3);
+  }
+  ringFx.raf = requestAnimationFrame(ringFxFrame);
+}
+
+function startRingFx() { if (!ringFx.raf) ringFxFrame(); }            // self-schedules the loop
+function stopRingFx()  { if (ringFx.raf) { cancelAnimationFrame(ringFx.raf); ringFx.raf = 0; } }
+function boostRingFx(amount) { ringFx.energy = Math.min(1, ringFx.energy + amount); }
+
 /**
  * Set the play/pause button to show either ⏸ (currently playing → tap to pause)
  * or ▶ (currently paused → tap to resume), with matching aria-label and tooltip.
@@ -1182,6 +1231,7 @@ function nextStep() {
 function endPace() {
   runtime.timer.stop();
   runtime.cues.stop();
+  stopRingFx();
   _resetRuntimeForNoPace();
   if (window.Capacitor?.isNativePlatform()) {
     stopNativeTimer();
@@ -1412,6 +1462,7 @@ async function init() {
   await loadTemplates();
   await initPlatform();
   runtime.cues.setVoice(state.settings.voiceName);
+  runtime.cues.setOnSpeak(() => boostRingFx(0.55));   // each cue swells the decoration rings
   syncPaces();
   // Skip Service Worker inside Capacitor — it uses its own asset serving layer.
   if ('serviceWorker' in navigator && !window.Capacitor?.isNativePlatform()) {

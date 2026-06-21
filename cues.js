@@ -15,6 +15,7 @@ export class CueScheduler {
     this._stopFn     = null;        // injectable native TTS stop function () => Promise<void>
     this._speechToken = 0;          // identifies the active utterance; stale completions are ignored
     this._currentIsCountdown = false; // is the currently-speaking utterance a countdown number?
+    this._onSpeak    = null;        // optional (text, isCountdown) => void, fired when a cue begins
   }
 
   // ── Configuration ────────────────────────────────────────────
@@ -34,6 +35,13 @@ export class CueScheduler {
   setSpeakFn(fn, stopFn = null) {
     this._speakFn = fn ?? null;
     this._stopFn  = stopFn ?? null;
+  }
+
+  /** Set a callback fired the moment any cue begins (opening, countdown, extra,
+   *  completion).  Runs on web and native alike, since the scheduler's queue is
+   *  exercised on both — used to drive the reactive ring flourish. */
+  setOnSpeak(fn) {
+    this._onSpeak = fn ?? null;
   }
 
   // ── Segment lifecycle ────────────────────────────────────────
@@ -146,6 +154,7 @@ export class CueScheduler {
     const { text, isCountdown } = this._queue.shift();
     this._busy = true;
     this._currentIsCountdown = isCountdown;
+    if (this._onSpeak) this._onSpeak(text, isCountdown);   // drive the reactive ring flourish
     // Token guards against stale completion callbacks.  When a high-priority cue
     // cancels an in-flight utterance, that utterance's onend/onerror (or the
     // native promise) still fires asynchronously afterward.  Without this guard
