@@ -24,6 +24,10 @@ svg { display: block; }
      pace-card chevrons — while --accent stays the primary action color. */
   --accent2:      var(--accent);
   --bg:           #060d06;
+  /* App background. Defaults to the flat --bg so existing themes are unchanged;
+     themes can override with a gradient that fades into --bg at the edges
+     (e.g. forest) for atmospheric depth behind the content. */
+  --bg-gradient:  var(--bg);
   --surface:      #0c1a0c;
   --surface2:     #132213;
   --surface3:     #1b2e1b;
@@ -48,7 +52,7 @@ svg { display: block; }
 [data-theme="arctic"]:not([data-mode="light"]) { --bg:#04090e; --surface:#0a1420; --surface2:#101d2c; --surface3:#162638; --text:#e8f4f8; --text-muted:#5a7e9a; }
 [data-theme="chalk"]:not([data-mode="light"])  { --bg:#080808; --surface:#141414; --surface2:#1e1e1e; --surface3:#282828; --text:#f0f0f0; --text-muted:#888; }
 [data-theme="sage"]:not([data-mode="light"])   { --bg:#121a15; --surface:#1b2620; --surface2:#25332b; --surface3:#2f3f35; --text:#e4ede6; --text-muted:#8aa090; }
-[data-theme="forest"]:not([data-mode="light"]) { --bg:#0c1710; --surface:#13251a; --surface2:#1c3325; --surface3:#244430; --text:#e8f3ea; --text-muted:#7a9a85; }
+[data-theme="forest"]:not([data-mode="light"]) { --bg:#0c1710; --bg-gradient:radial-gradient(125% 80% at 50% 38%, #21402e 0%, #16291d 45%, var(--bg) 78%); --surface:#182c1f; --surface2:#22402f; --surface3:#2d543d; --text:#e8f3ea; --text-muted:#8aa896; }
 
 /* Light mode */
 [data-mode="light"] { --bg:#f2faf2; --surface:#fff; --surface2:#e8f5e8; --surface3:#daeeda; --text:#0c1a0c; --text-muted:#5a7a5a; --border:rgba(0,0,0,.08); --accent:#1a8a04; --accent-dim:rgba(26,138,4,.12); --accent-glow:rgba(26,138,4,.25); --accent-text:#fff; }
@@ -57,7 +61,7 @@ svg { display: block; }
 [data-theme="arctic"][data-mode="light"] { --bg:#f0f8fc; --surface:#fff; --surface2:#ddf0f8; --surface3:#c8e8f4; --text:#040c14; --text-muted:#406080; --border:rgba(0,0,0,.08); --accent:#0077cc; --accent-text:#fff; --accent-dim:rgba(0,119,204,.10); --accent-glow:rgba(0,119,204,.25); }
 [data-theme="chalk"][data-mode="light"]  { --bg:#f4f4f4; --surface:#fff; --surface2:#e8e8e8; --surface3:#d8d8d8; --text:#111; --text-muted:#666; --border:rgba(0,0,0,.08); --accent:#222; --accent-text:#fff; --accent-dim:rgba(34,34,34,.10); --accent-glow:rgba(34,34,34,.20); }
 [data-theme="sage"][data-mode="light"]   { --bg:#eef3ef; --surface:#fff; --surface2:#e2ebe4; --surface3:#d4e2d8; --text:#16241b; --text-muted:#5a7064; --border:rgba(0,0,0,.08); --accent:#3d7a52; --accent2:#6a9e7d; --accent-text:#fff; --accent-dim:rgba(61,122,82,.10); --accent-glow:rgba(61,122,82,.22); }
-[data-theme="forest"][data-mode="light"] { --bg:#eef5ef; --surface:#fff; --surface2:#e0ece4; --surface3:#cfe3d5; --text:#0e1f15; --text-muted:#4e6e5a; --border:rgba(0,0,0,.08); --accent:#1f9d52; --accent2:#5a9e2a; --accent-text:#fff; --accent-dim:rgba(31,157,82,.10); --accent-glow:rgba(31,157,82,.22); }
+[data-theme="forest"][data-mode="light"] { --bg:#d6e5db; --bg-gradient:radial-gradient(125% 80% at 50% 34%, #f2f8f4 0%, #e3efe7 46%, var(--bg) 80%); --surface:#fff; --surface2:#e7f1ea; --surface3:#d2e4d9; --text:#0e1f15; --text-muted:#4e6e5a; --border:rgba(0,0,0,.08); --accent:#1f9d52; --accent2:#5a9e2a; --accent-text:#fff; --accent-dim:rgba(31,157,82,.10); --accent-glow:rgba(31,157,82,.22); }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-mode="dark"]) { --bg:#f2faf2; --surface:#fff; --surface2:#e8f5e8; --surface3:#daeeda; --text:#0c1a0c; --text-muted:#5a7a5a; --border:rgba(0,0,0,.08); --accent:#1a8a04; --accent-dim:rgba(26,138,4,.12); --accent-glow:rgba(26,138,4,.25); --accent-text:#fff; }
@@ -85,7 +89,7 @@ svg { display: block; }
    BASE
    ============================================================ */
 
-body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); color:var(--text); transition:background var(--transition),color var(--transition); -webkit-font-smoothing:antialiased; }
+body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg-gradient); color:var(--text); transition:color var(--transition); -webkit-font-smoothing:antialiased; }
 
 /* ============================================================
    SCREENS
@@ -346,7 +350,7 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
   box-shadow: 0 8px 32px var(--accent-glow);
 }
 
-.timer-header { border-bottom:1px solid var(--border); }
+.timer-header { border-bottom:none; background:transparent; }
 .timer-pace-name { font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:15px; letter-spacing:.08em; color:var(--text); }
 .timer-end-btn { color:var(--text-muted); }
 .timer-end-btn:hover, .timer-end-btn:active { background:rgba(255,80,80,.12); color:#ff5a5a; }
@@ -384,7 +388,7 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
 .overall-dot.done { background:var(--accent2); opacity:.55; }
 .overall-dot.active { background:var(--accent); }
 .timer-next { font-size:12px; color:var(--text-muted); opacity:.7; letter-spacing:.02em; }
-.timer-controls { display:flex; justify-content:center; gap:10px; padding:12px 16px calc(16px + var(--safe-bottom)); border-top:1px solid var(--border); background:var(--bg); flex-shrink:0; }
+.timer-controls { display:flex; justify-content:center; gap:10px; padding:12px 16px calc(16px + var(--safe-bottom)); background:transparent; flex-shrink:0; }
 
 /* ============================================================
    COMPLETE
