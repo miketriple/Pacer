@@ -469,6 +469,51 @@ function showScreen(id) {
   document.getElementById('screen-' + id)?.classList.add('active');
 }
 
+/**
+ * Themed replacement for window.confirm(). Returns a Promise that resolves true
+ * (confirmed) or false (cancelled / dismissed). Closes on the buttons, a
+ * backdrop click, Escape (cancel) or Enter (confirm).
+ * @param {string} message
+ * @param {{confirmText?:string, cancelText?:string, danger?:boolean}} [opts]
+ * @returns {Promise<boolean>}
+ */
+function confirmDialog(message, { confirmText = 'Confirm', cancelText = 'Cancel', danger = false } = {}) {
+  return new Promise(resolve => {
+    const overlay   = document.getElementById('confirm-overlay');
+    const msgEl     = document.getElementById('confirm-message');
+    const okBtn     = document.getElementById('confirm-ok');
+    const cancelBtn = document.getElementById('confirm-cancel');
+
+    msgEl.textContent     = message;
+    okBtn.textContent     = confirmText;
+    cancelBtn.textContent = cancelText;
+    okBtn.classList.toggle('btn-danger', danger);
+    okBtn.classList.toggle('btn-accent', !danger);
+    overlay.classList.add('open');
+    okBtn.focus();
+
+    function close(result) {
+      overlay.classList.remove('open');
+      okBtn.removeEventListener('click', onOk);
+      cancelBtn.removeEventListener('click', onCancel);
+      overlay.removeEventListener('click', onBackdrop);
+      document.removeEventListener('keydown', onKey);
+      resolve(result);
+    }
+    const onOk       = () => close(true);
+    const onCancel   = () => close(false);
+    const onBackdrop = e => { if (e.target === overlay) close(false); };
+    const onKey      = e => {
+      if (e.key === 'Escape') close(false);
+      else if (e.key === 'Enter') close(true);
+    };
+    okBtn.addEventListener('click', onOk);
+    cancelBtn.addEventListener('click', onCancel);
+    overlay.addEventListener('click', onBackdrop);
+    document.addEventListener('keydown', onKey);
+  });
+}
+
 // ============================================================
 // 7. HOME SCREEN
 // ============================================================
@@ -892,10 +937,10 @@ function buildGroupCard(group, groupIdx) {
   // any items array.  Delete keeps its own handler to preserve the confirmation
   // dialog (a group can hold many steps; an accidental click is more costly).
   header.querySelectorAll('.step-action-btn').forEach(btn => {
-    btn.addEventListener('click', () => {
+    btn.addEventListener('click', async () => {
       const action = btn.dataset.action;
       if (action === 'del') {
-        if (confirm(`Remove group "${group.name || 'Group'}"?`)) {
+        if (await confirmDialog(`Remove group "${group.name || 'Group'}"?`, { confirmText: 'Remove', danger: true })) {
           syncBuilderState();
           state.editingPace.items.splice(groupIdx, 1);
           renderBuilder();
@@ -1216,10 +1261,12 @@ function previousStep() {
 }
 
 /** Jump to the start of the next step. On the last step, confirm + end the pace. */
-function nextStep() {
+async function nextStep() {
   if (!runtime.pace) return;
   if (runtime.timer.segmentIndex >= runtime.timer.flatSegments.length - 1) {
-    if (confirm('End this pace?')) { endPace(); showScreen('home'); }
+    if (await confirmDialog('End this pace?', { confirmText: 'End', danger: true })) {
+      endPace(); showScreen('home');
+    }
     return;
   }
   runtime.cues.stop();
@@ -1352,7 +1399,7 @@ document.getElementById('btn-duplicate-pace').addEventListener('click', () => {
 
 document.getElementById('btn-delete-pace').addEventListener('click', async () => {
   if (!state.editingPace) return;
-  if (confirm(`Delete "${state.editingPace.name || 'this pace'}"?`)) {
+  if (await confirmDialog(`Delete "${state.editingPace.name || 'this pace'}"?`, { confirmText: 'Delete', danger: true })) {
     const id = state.editingPace.id;
     state.editingPace = null;
     showScreen('home');
@@ -1388,8 +1435,10 @@ document.getElementById('btn-start-pace').addEventListener('click', () => {
   startPace(pace);
 });
 
-document.getElementById('btn-end-pace').addEventListener('click', () => {
-  if (confirm('End this pace?')) { endPace(); showScreen('home'); }
+document.getElementById('btn-end-pace').addEventListener('click', async () => {
+  if (await confirmDialog('End this pace?', { confirmText: 'End', danger: true })) {
+    endPace(); showScreen('home');
+  }
 });
 document.getElementById('btn-manual-next').addEventListener('click', () => runtime.timer.advanceManual());
 document.getElementById('btn-pause-resume').addEventListener('click', () => {

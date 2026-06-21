@@ -433,3 +433,18 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
    steps don't blink the whole UI out and back every few seconds. */
 @keyframes stepSettle { from{transform:translateY(4px)} to{transform:translateY(0)} }
 .step-change { animation:stepSettle .28s cubic-bezier(.22,1,.36,1) both; }
+
+/* ============================================================
+   MODAL DIALOG (themed confirm)
+   ============================================================ */
+
+.modal-overlay { position:fixed; inset:0; z-index:200; display:none; align-items:center; justify-content:center; padding:24px calc(24px + var(--safe-bottom)); background:rgba(0,0,0,.55); }
+.modal-overlay.open { display:flex; animation:modalFade .16s ease both; }
+@keyframes modalFade { from{opacity:0} to{opacity:1} }
+.modal-card { background:var(--surface); border:1px solid var(--border); border-radius:18px; padding:24px 22px 20px; width:100%; max-width:340px; text-align:center; box-shadow:0 16px 48px rgba(0,0,0,.4); animation:modalPop .22s cubic-bezier(.34,1.4,.64,1) both; }
+@keyframes modalPop { from{opacity:0; transform:scale(.94) translateY(8px)} to{opacity:1; transform:scale(1) translateY(0)} }
+.modal-message { font-size:16px; line-height:1.5; color:var(--text); margin-bottom:22px; }
+.modal-actions { display:flex; gap:10px; }
+.modal-actions .btn { flex:1; }
+.btn-danger { background:#e5484d; color:#fff; box-shadow:0 4px 20px rgba(229,72,77,.3); }
+.btn-danger:hover, .btn-danger:active { filter:brightness(1.08); box-shadow:0 6px 26px rgba(229,72,77,.4); transform:translateY(-1px); }
