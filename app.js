@@ -1070,11 +1070,16 @@ function buildOverallDots(count) {
 }
 
 function animatePhaseTransition() {
-  const body = document.querySelector('.timer-body');
-  if (!body) return;
-  body.classList.remove('phase-transition');
-  void body.offsetWidth;
-  body.classList.add('phase-transition');
+  // Settle only the changing labels (step name + cue text) on a new segment,
+  // leaving the ring, time, dots and frame perfectly constant — so short steps
+  // update in place instead of blinking the whole UI.
+  ['timer-step-name', 'timer-cue-text'].forEach(id => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.classList.remove('step-change');
+    void el.offsetWidth;            // force reflow so the animation restarts
+    el.classList.add('step-change');
+  });
 }
 
 /**

@@ -418,5 +418,8 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
    PHASE TRANSITION
    ============================================================ */
 
-@keyframes phaseFlash { 0%{opacity:0;transform:scale(.96)}100%{opacity:1;transform:scale(1)} }
-.phase-transition { animation:phaseFlash .4s cubic-bezier(.22,1,.36,1) both; }
+/* On a new segment, only the changing labels gently settle into place — the
+   ring, time, controls and overall frame stay constant, so short (breathing)
+   steps don't blink the whole UI out and back every few seconds. */
+@keyframes stepSettle { from{transform:translateY(4px)} to{transform:translateY(0)} }
+.step-change { animation:stepSettle .28s cubic-bezier(.22,1,.36,1) both; }
