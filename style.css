@@ -18,6 +18,11 @@ svg { display: block; }
   --accent-dim:   rgba(57,255,20,0.12);
   --accent-glow:  rgba(57,255,20,0.45);
   --accent-text:  #000;
+  /* Secondary "depth" tone. Defaults to the primary accent so every existing
+     theme is unchanged; themes that want a distinct second color (sage, forest)
+     override --accent2. Used for ambient elements: progress fill, done dots,
+     pace-card chevrons — while --accent stays the primary action color. */
+  --accent2:      var(--accent);
   --bg:           #060d06;
   --surface:      #0c1a0c;
   --surface2:     #132213;
@@ -34,12 +39,16 @@ svg { display: block; }
 [data-theme="dusk"]   { --accent:#b44fff; --accent-dim:rgba(180,79,255,.12); --accent-glow:rgba(180,79,255,.45); --accent-text:#fff; }
 [data-theme="arctic"] { --accent:#00d4ff; --accent-dim:rgba(0,212,255,.12); --accent-glow:rgba(0,212,255,.45); --accent-text:#000; }
 [data-theme="chalk"]  { --accent:#d0d0d0; --accent-dim:rgba(208,208,208,.12); --accent-glow:rgba(208,208,208,.3); --accent-text:#000; }
+[data-theme="sage"]   { --accent:#8fbf9f; --accent2:#b8cdb0; --accent-dim:rgba(143,191,159,.14); --accent-glow:rgba(143,191,159,.30); --accent-text:#0c1a12; }
+[data-theme="forest"] { --accent:#4ade80; --accent2:#a3e635; --accent-dim:rgba(74,222,128,.14);  --accent-glow:rgba(74,222,128,.38);  --accent-text:#052e16; }
 
 /* Dark mode per theme */
 [data-theme="ember"]:not([data-mode="light"])  { --bg:#0d0804; --surface:#1c1008; --surface2:#25160c; --surface3:#2e1c12; --text:#f8f0e8; --text-muted:#8a7060; }
 [data-theme="dusk"]:not([data-mode="light"])   { --bg:#090610; --surface:#120d1e; --surface2:#1a1428; --surface3:#231c32; --text:#f0ecf8; --text-muted:#7a6a92; }
 [data-theme="arctic"]:not([data-mode="light"]) { --bg:#04090e; --surface:#0a1420; --surface2:#101d2c; --surface3:#162638; --text:#e8f4f8; --text-muted:#5a7e9a; }
 [data-theme="chalk"]:not([data-mode="light"])  { --bg:#080808; --surface:#141414; --surface2:#1e1e1e; --surface3:#282828; --text:#f0f0f0; --text-muted:#888; }
+[data-theme="sage"]:not([data-mode="light"])   { --bg:#121a15; --surface:#1b2620; --surface2:#25332b; --surface3:#2f3f35; --text:#e4ede6; --text-muted:#8aa090; }
+[data-theme="forest"]:not([data-mode="light"]) { --bg:#0c1710; --surface:#13251a; --surface2:#1c3325; --surface3:#244430; --text:#e8f3ea; --text-muted:#7a9a85; }
 
 /* Light mode */
 [data-mode="light"] { --bg:#f2faf2; --surface:#fff; --surface2:#e8f5e8; --surface3:#daeeda; --text:#0c1a0c; --text-muted:#5a7a5a; --border:rgba(0,0,0,.08); --accent:#1a8a04; --accent-dim:rgba(26,138,4,.12); --accent-glow:rgba(26,138,4,.25); --accent-text:#fff; }
@@ -47,6 +56,8 @@ svg { display: block; }
 [data-theme="dusk"][data-mode="light"]   { --bg:#f8f4fe; --surface:#fff; --surface2:#ede0fb; --surface3:#e0ccf8; --text:#140c28; --text-muted:#7060a0; --border:rgba(0,0,0,.08); --accent:#7700cc; --accent-text:#fff; --accent-dim:rgba(119,0,204,.10); --accent-glow:rgba(119,0,204,.25); }
 [data-theme="arctic"][data-mode="light"] { --bg:#f0f8fc; --surface:#fff; --surface2:#ddf0f8; --surface3:#c8e8f4; --text:#040c14; --text-muted:#406080; --border:rgba(0,0,0,.08); --accent:#0077cc; --accent-text:#fff; --accent-dim:rgba(0,119,204,.10); --accent-glow:rgba(0,119,204,.25); }
 [data-theme="chalk"][data-mode="light"]  { --bg:#f4f4f4; --surface:#fff; --surface2:#e8e8e8; --surface3:#d8d8d8; --text:#111; --text-muted:#666; --border:rgba(0,0,0,.08); --accent:#222; --accent-text:#fff; --accent-dim:rgba(34,34,34,.10); --accent-glow:rgba(34,34,34,.20); }
+[data-theme="sage"][data-mode="light"]   { --bg:#eef3ef; --surface:#fff; --surface2:#e2ebe4; --surface3:#d4e2d8; --text:#16241b; --text-muted:#5a7064; --border:rgba(0,0,0,.08); --accent:#3d7a52; --accent2:#6a9e7d; --accent-text:#fff; --accent-dim:rgba(61,122,82,.10); --accent-glow:rgba(61,122,82,.22); }
+[data-theme="forest"][data-mode="light"] { --bg:#eef5ef; --surface:#fff; --surface2:#e0ece4; --surface3:#cfe3d5; --text:#0e1f15; --text-muted:#4e6e5a; --border:rgba(0,0,0,.08); --accent:#1f9d52; --accent2:#5a9e2a; --accent-text:#fff; --accent-dim:rgba(31,157,82,.10); --accent-glow:rgba(31,157,82,.22); }
 
 @media (prefers-color-scheme: light) {
   :root:not([data-mode="dark"]) { --bg:#f2faf2; --surface:#fff; --surface2:#e8f5e8; --surface3:#daeeda; --text:#0c1a0c; --text-muted:#5a7a5a; --border:rgba(0,0,0,.08); --accent:#1a8a04; --accent-dim:rgba(26,138,4,.12); --accent-glow:rgba(26,138,4,.25); --accent-text:#fff; }
@@ -159,7 +170,7 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
 .pace-card-info { flex:1; min-width:0; }
 .pace-card-name { font-family:'Barlow Condensed',sans-serif; font-weight:600; font-size:17px; color:var(--text); white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
 .pace-card-meta { font-size:13px; color:var(--text-muted); margin-top:2px; }
-.pace-card-arrow { color:var(--accent); font-size:18px; flex-shrink:0; opacity:.6; }
+.pace-card-arrow { color:var(--accent2); font-size:18px; flex-shrink:0; opacity:.6; }
 /* Reorder-mode card: not clickable as a whole, no hover lift. */
 .pace-card-reorder { cursor:default; }
 .pace-card-reorder:hover, .pace-card-reorder:active { transform:none; background:var(--surface); border-color:var(--border); }
@@ -345,10 +356,10 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg); c
 .timer-step-name { font-family:'Barlow Condensed',sans-serif; font-weight:700; font-size:22px; letter-spacing:.04em; color:var(--text); margin:12px 0 16px; min-height:28px; }
 .timer-progress-wrap { width:100%; max-width:340px; margin-bottom:10px; }
 .timer-progress-bar { height:4px; background:var(--surface2); border-radius:2px; overflow:hidden; }
-.timer-progress-fill { height:100%; background:var(--accent); border-radius:2px; box-shadow:0 0 8px var(--accent-glow); transition:width 0.26s linear; width:0%; }
+.timer-progress-fill { height:100%; background:var(--accent2); border-radius:2px; box-shadow:0 0 8px var(--accent-glow); transition:width 0.26s linear; width:0%; }
 .timer-overall-progress { display:flex; gap:5px; justify-content:center; flex-wrap:wrap; max-width:300px; margin:8px auto; min-height:10px; }
 .overall-dot { width:7px; height:7px; border-radius:50%; background:var(--surface3); transition:background var(--transition); }
-.overall-dot.done { background:var(--accent); opacity:.5; }
+.overall-dot.done { background:var(--accent2); opacity:.5; }
 .overall-dot.active { background:var(--accent); }
 .timer-next { font-size:13px; color:var(--text-muted); margin-top:6px; }
 .timer-controls { display:flex; justify-content:center; gap:10px; padding:12px 16px calc(16px + var(--safe-bottom)); border-top:1px solid var(--border); background:var(--bg); flex-shrink:0; }

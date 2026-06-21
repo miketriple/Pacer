@@ -30,7 +30,6 @@ import org.json.JSONObject;
 
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Locale;
 
 /**
  * Android Foreground Service that runs the Pacer cue schedule natively.
@@ -82,7 +81,7 @@ import java.util.Locale;
  *   MediaSession with STATE_PLAYING when the pace starts and release it
  *   when it stops.
  */
-public class PacerTimerService extends Service implements TextToSpeech.OnInitListener {
+public class PacerTimerService extends Service {
 
     public static final String ACTION_START       = "START";
     public static final String ACTION_STOP        = "STOP";
@@ -124,8 +123,6 @@ public class PacerTimerService extends Service implements TextToSpeech.OnInitLis
      *  Determines which release grace each cue gets at schedule time. */
     private static final long   BURST_THRESHOLD_MS     = 2000L;      // 2 s
 
-    private TextToSpeech           tts;
-    private boolean                ttsReady        = false;
     private String                 pendingCuesJson = null;     // held until TTS is ready
     private String                 pendingCuesPaceName = null; // paceName tied to pendingCuesJson
     private String                 pendingSpeakText = null;    // SPEAK_CUE arrived before TTS ready
@@ -178,7 +175,7 @@ public class PacerTimerService extends Service implements TextToSpeech.OnInitLis
     public void onCreate() {
         super.onCreate();
         Log.d(TAG, "onCreate");
-        tts = new TextToSpeech(this, this);
+        TtsHolder.init(this);   // fallback init (e.g. alarm rebirth where the activity never ran)
         alarmManager = (AlarmManager) getSystemService(ALARM_SERVICE);
         audioManager = (AudioManager) getSystemService(AUDIO_SERVICE);
         warnIfExactAlarmsBlocked();
@@ -278,13 +275,16 @@ public class PacerTimerService extends Service implements TextToSpeech.OnInitLis
 
             String cuesJson = intent.getStringExtra(EXTRA_CUES);
             if (cuesJson != null) {
-                if (ttsReady) {
+                if (TtsHolder.isReady()) {
+                    attachTtsListener();
                     scheduleCues(cuesJson, paceName);
                 } else {
-                    // TTS init is async — store and flush once onInit() fires
+                    // Shared engine still initialising (only possible if a pace
+                    // starts within ~1 s of a cold app launch) — flush when ready.
                     Log.d(TAG, "TTS not ready yet — deferring " + cuesJson.length() + " bytes of cues");
                     pendingCuesJson     = cuesJson;
                     pendingCuesPaceName = paceName;
+                    TtsHolder.runWhenReady(this::onTtsReadyFlush);
                 }
             } else {
                 Log.w(TAG, "No cues JSON in intent");
@@ -302,10 +302,10 @@ public class PacerTimerService extends Service implements TextToSpeech.OnInitLis
             if (paceName == null) paceName = "Pacer";
             setupMediaSession();
             startForegroundCompat(paceName);
-            // If we just rebirthed, TTS isn't ready yet — but the act of calling
-            // `new TextToSpeech(...)` in onCreate already kicked off init, which
-            // IS the warmup.  No further action needed in that case.
-            if (ttsReady) warmupTts();
+            // If TTS is already warm, a quick silent pulse keeps it that way.
+            // If not (rare cold rebirth), init is already underway — that IS the
+            // warmup, so there's nothing more to do.
+            if (TtsHolder.isReady()) { attachTtsListener(); warmupTts(); }
 
         } else if (ACTION_SPEAK_CUE.equals(action)) {
             // Fired by an AlarmManager alarm for a far-horizon cue.  The service
@@ -326,15 +326,14 @@ public class PacerTimerService extends Service implements TextToSpeech.OnInitLis
             boolean midBurst   = intent.getBooleanExtra(EXTRA_MID_BURST,   false);
             boolean skipIfBusy = intent.getBooleanExtra(EXTRA_SKIP_IF_BUSY, false);
             if (text != null) {
-                if (ttsReady) {
+                if (TtsHolder.isReady()) {
+                    attachTtsListener();
                     speak(text, midBurst, skipIfBusy);
                 } else {
-                    // TTS still initialising — speak once onInit() lands.
+                    // Shared engine still initialising — speak once it's ready.
                     Log.d(TAG, "TTS not ready — deferring SPEAK_CUE: " + text);
                     pendingSpeakText = text;
-                    // midBurst & skipIfBusy hints are lost on rebirth-while-cold,
-                    // but by the time TTS init finishes there's nothing else
-                    // speaking — so skipIfBusy would be a no-op anyway.
+                    TtsHolder.runWhenReady(this::onTtsReadyFlush);
                 }
             } else {
                 Log.w(TAG, "SPEAK_CUE intent missing " + EXTRA_CUE_TEXT);
@@ -351,7 +350,10 @@ public class PacerTimerService extends Service implements TextToSpeech.OnInitLis
     public void onDestroy() {
         Log.d(TAG, "onDestroy");
         handler.removeCallbacksAndMessages(null);
-        if (tts != null) { tts.shutdown(); tts = null; }
+        // NOTE: do NOT shut down the TTS engine — it is shared and app-lifetime
+        // (TtsHolder). Shutting it down here would re-introduce the per-pace cold
+        // init, and would also kill audio for a pace still running in the
+        // background when the activity is destroyed.
         releaseWakeLock();
         releaseMediaSession();
         super.onDestroy();
@@ -539,7 +541,8 @@ public class PacerTimerService extends Service implements TextToSpeech.OnInitLis
     }
 
     private void speak(String text, boolean midBurst, boolean skipIfBusy) {
-        if (tts == null || !ttsReady) {
+        TextToSpeech tts = TtsHolder.get();
+        if (tts == null || !TtsHolder.isReady()) {
             Log.w(TAG, "speak skipped — tts not ready: " + text);
             return;
         }
@@ -581,83 +584,77 @@ public class PacerTimerService extends Service implements TextToSpeech.OnInitLis
      * the engine is already warm and we skip — nothing useful to do.
      */
     private void warmupTts() {
-        if (tts == null || !ttsReady) return;
+        TextToSpeech tts = TtsHolder.get();
+        if (tts == null || !TtsHolder.isReady()) return;
         if (tts.isSpeaking()) return;     // engine already warm — nothing to do
         Log.d(TAG, "warmup");
         tts.playSilentUtterance(50, TextToSpeech.QUEUE_ADD, "warmup-" + System.nanoTime());
         lastSpeakTimeMs = SystemClock.elapsedRealtime();
     }
 
-    // ── TextToSpeech.OnInitListener ──────────────────────────────
+    // ── Shared TTS engine wiring ─────────────────────────────────
 
-    @Override
-    public void onInit(int status) {
-        if (tts == null) return;   // service was destroyed before TTS connected — ignore
-        Log.d(TAG, "TTS onInit status=" + status);
-        if (status == TextToSpeech.SUCCESS) {
-            tts.setLanguage(Locale.US);
-            tts.setSpeechRate(1.1f);
-            // Label the audio stream as navigation guidance — this matches the
-            // AudioAttributes we use when requesting focus, so the system applies
-            // the same routing/ducking treatment Google Maps prompts get.
-            tts.setAudioAttributes(new AudioAttributes.Builder()
-                    .setUsage(AudioAttributes.USAGE_ASSISTANCE_NAVIGATION_GUIDANCE)
-                    .setContentType(AudioAttributes.CONTENT_TYPE_SPEECH)
-                    .build());
-            tts.setOnUtteranceProgressListener(new UtteranceProgressListener() {
-                @Override public void onStart(String utteranceId) { /* no-op */ }
+    /**
+     * Utterance callbacks for the shared engine.  Created once per service
+     * instance and pointed at the shared engine (via attachTtsListener) when the
+     * service starts.  Engine configuration (language, rate, audio attributes)
+     * lives in TtsHolder; this listener only carries the per-utterance state the
+     * service owns: the ourSpeaking busy flag, audio-focus release, and logging.
+     */
+    private final UtteranceProgressListener ttsListener = new UtteranceProgressListener() {
+        @Override public void onStart(String utteranceId) { /* no-op (was the audio-begins diagnostic) */ }
 
-                @Override public void onDone(String utteranceId) {
-                    ourSpeaking = false;   // direct (volatile) so a following cue sees it at once
-                    handler.post(() -> handleUtteranceEnd(utteranceId));
-                }
+        @Override public void onDone(String utteranceId) {
+            ourSpeaking = false;   // direct (volatile) so a following cue sees it at once
+            handler.post(() -> handleUtteranceEnd(utteranceId));
+        }
 
-                @Override @Deprecated public void onError(String utteranceId) {
-                    ourSpeaking = false;
-                    handler.post(() -> handleUtteranceEnd(utteranceId));
-                }
+        @Override @Deprecated public void onError(String utteranceId) {
+            ourSpeaking = false;
+            handler.post(() -> handleUtteranceEnd(utteranceId));
+        }
 
-                @Override public void onError(String utteranceId, int errorCode) {
-                    ourSpeaking = false;
-                    handler.post(() -> handleUtteranceEnd(utteranceId));
-                }
+        @Override public void onError(String utteranceId, int errorCode) {
+            ourSpeaking = false;
+            handler.post(() -> handleUtteranceEnd(utteranceId));
+        }
 
-                @Override public void onStop(String utteranceId, boolean interrupted) {
-                    // interrupted=true means QUEUE_FLUSH from the next speak() —
-                    // that call already set ourSpeaking=true and handled focus, so
-                    // we must NOT clear the flag here (doing so would let a
-                    // skipIfBusy cue wrongly fire over the new utterance).
-                    if (interrupted) return;
-                    ourSpeaking = false;
-                    handler.post(() -> handleUtteranceEnd(utteranceId));
-                }
-            });
-            // The engine is now loaded and warm — record this as the most recent
-            // "TTS active" moment so scheduleCues' gap-warmup check starts from
-            // a sensible baseline rather than treating the cue at delayMs=0 as
-            // "after a huge silence".
-            lastSpeakTimeMs = SystemClock.elapsedRealtime();
-            ttsReady = true;
-            // Flush any cues that arrived before TTS was ready (START path)
-            if (pendingCuesJson != null) {
-                Log.d(TAG, "TTS ready — flushing deferred cue schedule");
-                final String json     = pendingCuesJson;
-                final String paceName = pendingCuesPaceName != null ? pendingCuesPaceName : "Pacer";
-                pendingCuesJson     = null;
-                pendingCuesPaceName = null;
-                handler.post(() -> scheduleCues(json, paceName));
-            }
-            // Flush a deferred SPEAK_CUE (alarm fired while TTS was still initialising).
-            // We don't know the cue's burst context after the rebirth-while-cold path,
-            // so default to "last-in-burst" — short release, music recovers promptly.
-            if (pendingSpeakText != null) {
-                final String t = pendingSpeakText;
-                pendingSpeakText = null;
-                Log.d(TAG, "TTS ready — speaking deferred cue: " + t);
-                handler.post(() -> speak(t, /*midBurst*/ false, /*skipIfBusy*/ false));
-            }
-        } else {
-            Log.w(TAG, "TTS initialisation failed with status " + status);
+        @Override public void onStop(String utteranceId, boolean interrupted) {
+            // interrupted=true means QUEUE_FLUSH from the next speak() — that call
+            // already set ourSpeaking=true and handled focus, so we must NOT clear
+            // the flag here (doing so would let a skipIfBusy cue wrongly fire over
+            // the new utterance).
+            if (interrupted) return;
+            ourSpeaking = false;
+            handler.post(() -> handleUtteranceEnd(utteranceId));
+        }
+    };
+
+    /** Point the shared engine's utterance callbacks at THIS service instance. */
+    private void attachTtsListener() {
+        TtsHolder.setListener(ttsListener);
+    }
+
+    /**
+     * Run when the shared engine becomes ready after a pace or cue arrived while
+     * it was still initialising — only possible if a pace starts within ~1 s of a
+     * cold app launch.  Attaches our listener and flushes whatever was deferred.
+     */
+    private void onTtsReadyFlush() {
+        attachTtsListener();
+        if (pendingCuesJson != null) {
+            Log.d(TAG, "TTS ready — flushing deferred cue schedule");
+            final String json     = pendingCuesJson;
+            final String paceName = pendingCuesPaceName != null ? pendingCuesPaceName : "Pacer";
+            pendingCuesJson     = null;
+            pendingCuesPaceName = null;
+            handler.post(() -> scheduleCues(json, paceName));
+        }
+        if (pendingSpeakText != null) {
+            final String t = pendingSpeakText;
+            pendingSpeakText = null;
+            Log.d(TAG, "TTS ready — speaking deferred cue: " + t);
+            handler.post(() -> speak(t, /*midBurst*/ false, /*skipIfBusy*/ false));
         }
     }
 
@@ -808,7 +805,10 @@ public class PacerTimerService extends Service implements TextToSpeech.OnInitLis
         paceStartAnchorMs = 0;
         persistRunId(0);   // no active run — any later stale alarm will be dropped
         isForeground = false;
-        if (tts != null) tts.stop();
+        // Stop any in-progress speech, but do NOT shut the shared engine down —
+        // it stays warm for the next pace (TtsHolder).
+        TextToSpeech shared = TtsHolder.get();
+        if (shared != null) shared.stop();
         ourSpeaking = false;
         releaseAudioFocusNow();
         releaseWakeLock();

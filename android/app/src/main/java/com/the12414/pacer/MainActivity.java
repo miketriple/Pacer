@@ -15,6 +15,10 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(PacerTimerPlugin.class);
         super.onCreate(savedInstanceState);
         requestNotificationPermission();
+        // Warm the shared TTS engine at launch so the first pace's opening cue
+        // isn't delayed ~1 s by a cold engine init. The engine is reused for the
+        // whole app session (see TtsHolder).
+        TtsHolder.init(getApplicationContext());
     }
 
     /**

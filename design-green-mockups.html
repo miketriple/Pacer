@@ -1,0 +1,425 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Pacer Green UI Mockups</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #eef3ec;
+      color: #15251d;
+    }
+    .board {
+      max-width: 1520px;
+      margin: 0 auto;
+      padding: 28px;
+    }
+    .board-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: end;
+      gap: 24px;
+      margin-bottom: 22px;
+    }
+    h1 {
+      margin: 0;
+      font-size: 28px;
+      letter-spacing: 0;
+      font-weight: 760;
+    }
+    .note {
+      max-width: 560px;
+      color: #66766d;
+      line-height: 1.45;
+      font-size: 14px;
+      margin: 0;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(250px, 1fr));
+      gap: 18px;
+      align-items: start;
+    }
+    .concept {
+      border: 1px solid rgba(20, 40, 30, 0.14);
+      background: rgba(255, 255, 255, 0.72);
+      padding: 12px;
+      border-radius: 8px;
+      box-shadow: 0 18px 50px rgba(27, 48, 35, 0.10);
+    }
+    .concept-label {
+      display: flex;
+      justify-content: space-between;
+      gap: 12px;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+    .concept-name {
+      font-weight: 760;
+      font-size: 16px;
+    }
+    .concept-vibe {
+      color: #68776d;
+      font-size: 12px;
+      text-align: right;
+    }
+    .phone {
+      width: 100%;
+      min-height: 640px;
+      border-radius: 8px;
+      overflow: hidden;
+      border: 1px solid rgba(255,255,255,0.22);
+      display: flex;
+      flex-direction: column;
+      position: relative;
+    }
+    .status {
+      height: 24px;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 0 14px;
+      font-size: 10px;
+      opacity: 0.75;
+      letter-spacing: 0;
+    }
+    .appbar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 12px 14px;
+    }
+    .brand {
+      font-size: 12px;
+      letter-spacing: 0.18em;
+      font-weight: 780;
+    }
+    .icon {
+      width: 32px;
+      height: 32px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      font-size: 15px;
+    }
+    .content {
+      padding: 10px 14px 14px;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+      flex: 1;
+    }
+    .section-title {
+      font-size: 11px;
+      letter-spacing: 0.12em;
+      text-transform: uppercase;
+      font-weight: 780;
+      opacity: 0.74;
+      margin-top: 2px;
+    }
+    .pace-row, .step-card, .small-panel {
+      border-radius: 8px;
+      padding: 12px;
+      border: 1px solid transparent;
+    }
+    .pace-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto;
+      gap: 10px;
+      align-items: center;
+    }
+    .dots {
+      display: flex;
+      gap: 4px;
+      min-width: 40px;
+    }
+    .dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+    }
+    .pace-title, .step-title {
+      font-weight: 720;
+      font-size: 15px;
+      margin-bottom: 2px;
+    }
+    .meta {
+      font-size: 12px;
+      opacity: 0.68;
+    }
+    .arrow {
+      font-size: 20px;
+      opacity: 0.55;
+    }
+    .button-row {
+      display: flex;
+      gap: 8px;
+      margin-top: auto;
+    }
+    .button {
+      border-radius: 8px;
+      padding: 11px 12px;
+      font-weight: 760;
+      font-size: 13px;
+      text-align: center;
+      flex: 1;
+    }
+    .builder-name {
+      border: 0;
+      width: 100%;
+      border-radius: 8px;
+      padding: 12px;
+      font-weight: 720;
+      font-size: 16px;
+    }
+    .toggle {
+      display: flex;
+      gap: 5px;
+      padding: 5px;
+      border-radius: 8px;
+      margin-bottom: 2px;
+    }
+    .toggle span {
+      flex: 1;
+      padding: 7px 5px;
+      border-radius: 6px;
+      text-align: center;
+      font-size: 11px;
+      font-weight: 720;
+    }
+    .step-card {
+      display: flex;
+      flex-direction: column;
+      gap: 10px;
+    }
+    .step-top {
+      display: flex;
+      align-items: center;
+      gap: 9px;
+    }
+    .color-chip {
+      width: 16px;
+      height: 16px;
+      border-radius: 50%;
+      flex: 0 0 auto;
+    }
+    .fields {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 8px;
+    }
+    .field {
+      border-radius: 8px;
+      padding: 9px;
+      font-size: 12px;
+    }
+    .timer {
+      text-align: center;
+      padding-top: 12px;
+    }
+    .timer-label {
+      font-size: 11px;
+      letter-spacing: 0.14em;
+      text-transform: uppercase;
+      font-weight: 760;
+      opacity: 0.7;
+    }
+    .time {
+      font-size: 58px;
+      font-weight: 760;
+      line-height: 1;
+      margin: 22px 0 10px;
+      font-variant-numeric: tabular-nums;
+    }
+    .current {
+      font-weight: 760;
+      font-size: 22px;
+      margin-bottom: 16px;
+    }
+    .bar {
+      height: 8px;
+      border-radius: 999px;
+      overflow: hidden;
+      margin: 14px 0 14px;
+    }
+    .fill {
+      width: 64%;
+      height: 100%;
+      border-radius: 999px;
+    }
+    .next {
+      font-size: 13px;
+      opacity: 0.74;
+      margin-bottom: 18px;
+    }
+    .controls {
+      display: grid;
+      grid-template-columns: repeat(4, 1fr);
+      gap: 8px;
+    }
+    .control {
+      height: 42px;
+      border-radius: 8px;
+      display: grid;
+      place-items: center;
+      font-weight: 800;
+    }
+    .palette {
+      display: flex;
+      gap: 6px;
+      margin-top: 10px;
+    }
+    .swatch {
+      height: 18px;
+      flex: 1;
+      border-radius: 6px;
+      border: 1px solid rgba(0,0,0,0.10);
+    }
+
+    .moss .phone { background: #f3f7ef; color: #203328; border-color: #ceddcb; }
+    .moss .status, .moss .brand { color: #315f3e; }
+    .moss .icon, .moss .pace-row, .moss .step-card, .moss .small-panel { background: #ffffff; border-color: #dce8d8; }
+    .moss .builder-name, .moss .field, .moss .toggle { background: #e7f0e1; color: #203328; }
+    .moss .toggle .active, .moss .button.primary, .moss .fill { background: #4e8f5b; color: #fff; }
+    .moss .button.secondary, .moss .control { background: #dfead8; color: #264831; }
+    .moss .bar { background: #d6e4d0; }
+
+    .glass .phone { background: #10231b; color: #ecf7ee; border-color: #264e3b; }
+    .glass .status, .glass .brand { color: #9addaf; }
+    .glass .icon, .glass .pace-row, .glass .step-card, .glass .small-panel { background: rgba(32, 66, 49, 0.72); border-color: rgba(155, 219, 173, 0.20); }
+    .glass .builder-name, .glass .field, .glass .toggle { background: #183729; color: #ecf7ee; }
+    .glass .toggle .active, .glass .button.primary, .glass .fill { background: #8bd694; color: #0c2017; }
+    .glass .button.secondary, .glass .control { background: #234936; color: #dbf3df; }
+    .glass .bar { background: #1b3b2d; }
+
+    .matcha .phone { background: #fbf7e9; color: #26341f; border-color: #ded7bf; }
+    .matcha .status, .matcha .brand { color: #597432; }
+    .matcha .icon, .matcha .pace-row, .matcha .step-card, .matcha .small-panel { background: #fffdf5; border-color: #e4dec6; }
+    .matcha .builder-name, .matcha .field, .matcha .toggle { background: #edf0d6; color: #26341f; }
+    .matcha .toggle .active, .matcha .button.primary, .matcha .fill { background: #78963d; color: #fff; }
+    .matcha .button.secondary, .matcha .control { background: #e8e6c9; color: #3b4a24; }
+    .matcha .bar { background: #dddfbf; }
+
+    .signal .phone { background: #07140d; color: #edf8ef; border-color: #1b452c; }
+    .signal .status, .signal .brand { color: #55d979; }
+    .signal .icon, .signal .pace-row, .signal .step-card, .signal .small-panel { background: #10291a; border-color: #245c39; }
+    .signal .builder-name, .signal .field, .signal .toggle { background: #17351f; color: #edf8ef; }
+    .signal .toggle .active, .signal .button.primary, .signal .fill { background: #62e37f; color: #07140d; }
+    .signal .button.secondary, .signal .control { background: #1d4529; color: #e8f7eb; }
+    .signal .bar { background: #193621; }
+
+    @media (max-width: 1200px) {
+      .grid { grid-template-columns: repeat(2, minmax(260px, 1fr)); }
+    }
+    @media (max-width: 680px) {
+      .board { padding: 16px; }
+      .board-header { display: block; }
+      .note { margin-top: 8px; }
+      .grid { grid-template-columns: 1fr; }
+    }
+  </style>
+</head>
+<body>
+  <main class="board">
+    <header class="board-header">
+      <div>
+        <h1>Pacer Green UI Directions</h1>
+      </div>
+      <p class="note">Four starting points for a calmer green design language. Each direction shows home, builder, and timer elements using more than one green, with softer contrast than Venom.</p>
+    </header>
+
+    <section class="grid">
+      <article class="concept moss">
+        <div class="concept-label">
+          <div class="concept-name">Moss Studio</div>
+          <div class="concept-vibe">quiet, grounded</div>
+        </div>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span>78%</span></div>
+          <div class="appbar"><div class="brand">PACER</div><div class="icon">S</div></div>
+          <div class="content">
+            <div class="section-title">My Paces</div>
+            <div class="pace-row"><div class="dots"><i class="dot" style="background:#4e8f5b"></i><i class="dot" style="background:#9dbb65"></i><i class="dot" style="background:#7fb08a"></i></div><div><div class="pace-title">Morning Focus</div><div class="meta">6 steps - 18:00</div></div><div class="arrow">></div></div>
+            <div class="pace-row"><div class="dots"><i class="dot" style="background:#78963d"></i><i class="dot" style="background:#c0d08b"></i><i class="dot" style="background:#4e8f5b"></i></div><div><div class="pace-title">Writing Sprint</div><div class="meta">4 steps - 25:00</div></div><div class="arrow">></div></div>
+            <input class="builder-name" value="Box Breathing">
+            <div class="toggle"><span>Silent</span><span>3 sec</span><span class="active">5 sec</span></div>
+            <div class="step-card"><div class="step-top"><span class="color-chip" style="background:#4e8f5b"></span><div><div class="step-title">Inhale</div><div class="meta">Voice cue: Inhale slowly</div></div></div><div class="fields"><div class="field">Duration 00:04</div><div class="field">Cue at start</div></div></div>
+            <div class="small-panel timer"><div class="timer-label">Round 2 of 4</div><div class="time">03:18</div><div class="current">Hold</div><div class="bar"><div class="fill"></div></div><div class="next">Next: Exhale - 00:04</div><div class="controls"><div class="control">|<</div><div class="control">R</div><div class="control">||</div><div class="control">>|</div></div></div>
+            <div class="button-row"><div class="button secondary">+ Group</div><div class="button primary">Start</div></div>
+          </div>
+        </div>
+        <div class="palette"><span class="swatch" style="background:#f3f7ef"></span><span class="swatch" style="background:#dfead8"></span><span class="swatch" style="background:#4e8f5b"></span><span class="swatch" style="background:#203328"></span></div>
+      </article>
+
+      <article class="concept glass">
+        <div class="concept-label">
+          <div class="concept-name">Forest Glass</div>
+          <div class="concept-vibe">dark, refined</div>
+        </div>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span>78%</span></div>
+          <div class="appbar"><div class="brand">PACER</div><div class="icon">S</div></div>
+          <div class="content">
+            <div class="section-title">My Paces</div>
+            <div class="pace-row"><div class="dots"><i class="dot" style="background:#8bd694"></i><i class="dot" style="background:#4da56f"></i><i class="dot" style="background:#b6dda6"></i></div><div><div class="pace-title">Morning Focus</div><div class="meta">6 steps - 18:00</div></div><div class="arrow">></div></div>
+            <div class="pace-row"><div class="dots"><i class="dot" style="background:#4da56f"></i><i class="dot" style="background:#77bc8e"></i><i class="dot" style="background:#8bd694"></i></div><div><div class="pace-title">Writing Sprint</div><div class="meta">4 steps - 25:00</div></div><div class="arrow">></div></div>
+            <input class="builder-name" value="Box Breathing">
+            <div class="toggle"><span>Silent</span><span>3 sec</span><span class="active">5 sec</span></div>
+            <div class="step-card"><div class="step-top"><span class="color-chip" style="background:#8bd694"></span><div><div class="step-title">Inhale</div><div class="meta">Voice cue: Inhale slowly</div></div></div><div class="fields"><div class="field">Duration 00:04</div><div class="field">Cue at start</div></div></div>
+            <div class="small-panel timer"><div class="timer-label">Round 2 of 4</div><div class="time">03:18</div><div class="current">Hold</div><div class="bar"><div class="fill"></div></div><div class="next">Next: Exhale - 00:04</div><div class="controls"><div class="control">|<</div><div class="control">R</div><div class="control">||</div><div class="control">>|</div></div></div>
+            <div class="button-row"><div class="button secondary">+ Group</div><div class="button primary">Start</div></div>
+          </div>
+        </div>
+        <div class="palette"><span class="swatch" style="background:#10231b"></span><span class="swatch" style="background:#234936"></span><span class="swatch" style="background:#8bd694"></span><span class="swatch" style="background:#ecf7ee"></span></div>
+      </article>
+
+      <article class="concept matcha">
+        <div class="concept-label">
+          <div class="concept-name">Matcha Focus</div>
+          <div class="concept-vibe">light, warm</div>
+        </div>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span>78%</span></div>
+          <div class="appbar"><div class="brand">PACER</div><div class="icon">S</div></div>
+          <div class="content">
+            <div class="section-title">My Paces</div>
+            <div class="pace-row"><div class="dots"><i class="dot" style="background:#78963d"></i><i class="dot" style="background:#a7b85c"></i><i class="dot" style="background:#5f7e3c"></i></div><div><div class="pace-title">Morning Focus</div><div class="meta">6 steps - 18:00</div></div><div class="arrow">></div></div>
+            <div class="pace-row"><div class="dots"><i class="dot" style="background:#98a94f"></i><i class="dot" style="background:#c5c978"></i><i class="dot" style="background:#78963d"></i></div><div><div class="pace-title">Writing Sprint</div><div class="meta">4 steps - 25:00</div></div><div class="arrow">></div></div>
+            <input class="builder-name" value="Box Breathing">
+            <div class="toggle"><span>Silent</span><span>3 sec</span><span class="active">5 sec</span></div>
+            <div class="step-card"><div class="step-top"><span class="color-chip" style="background:#78963d"></span><div><div class="step-title">Inhale</div><div class="meta">Voice cue: Inhale slowly</div></div></div><div class="fields"><div class="field">Duration 00:04</div><div class="field">Cue at start</div></div></div>
+            <div class="small-panel timer"><div class="timer-label">Round 2 of 4</div><div class="time">03:18</div><div class="current">Hold</div><div class="bar"><div class="fill"></div></div><div class="next">Next: Exhale - 00:04</div><div class="controls"><div class="control">|<</div><div class="control">R</div><div class="control">||</div><div class="control">>|</div></div></div>
+            <div class="button-row"><div class="button secondary">+ Group</div><div class="button primary">Start</div></div>
+          </div>
+        </div>
+        <div class="palette"><span class="swatch" style="background:#fbf7e9"></span><span class="swatch" style="background:#e8e6c9"></span><span class="swatch" style="background:#78963d"></span><span class="swatch" style="background:#26341f"></span></div>
+      </article>
+
+      <article class="concept signal">
+        <div class="concept-label">
+          <div class="concept-name">Signal Calm</div>
+          <div class="concept-vibe">Venom, softened</div>
+        </div>
+        <div class="phone">
+          <div class="status"><span>9:41</span><span>78%</span></div>
+          <div class="appbar"><div class="brand">PACER</div><div class="icon">S</div></div>
+          <div class="content">
+            <div class="section-title">My Paces</div>
+            <div class="pace-row"><div class="dots"><i class="dot" style="background:#62e37f"></i><i class="dot" style="background:#2ca95a"></i><i class="dot" style="background:#a6efb3"></i></div><div><div class="pace-title">Morning Focus</div><div class="meta">6 steps - 18:00</div></div><div class="arrow">></div></div>
+            <div class="pace-row"><div class="dots"><i class="dot" style="background:#2ca95a"></i><i class="dot" style="background:#4ac56d"></i><i class="dot" style="background:#62e37f"></i></div><div><div class="pace-title">Writing Sprint</div><div class="meta">4 steps - 25:00</div></div><div class="arrow">></div></div>
+            <input class="builder-name" value="Box Breathing">
+            <div class="toggle"><span>Silent</span><span>3 sec</span><span class="active">5 sec</span></div>
+            <div class="step-card"><div class="step-top"><span class="color-chip" style="background:#62e37f"></span><div><div class="step-title">Inhale</div><div class="meta">Voice cue: Inhale slowly</div></div></div><div class="fields"><div class="field">Duration 00:04</div><div class="field">Cue at start</div></div></div>
+            <div class="small-panel timer"><div class="timer-label">Round 2 of 4</div><div class="time">03:18</div><div class="current">Hold</div><div class="bar"><div class="fill"></div></div><div class="next">Next: Exhale - 00:04</div><div class="controls"><div class="control">|<</div><div class="control">R</div><div class="control">||</div><div class="control">>|</div></div></div>
+            <div class="button-row"><div class="button secondary">+ Group</div><div class="button primary">Start</div></div>
+          </div>
+        </div>
+        <div class="palette"><span class="swatch" style="background:#07140d"></span><span class="swatch" style="background:#1d4529"></span><span class="swatch" style="background:#62e37f"></span><span class="swatch" style="background:#edf8ef"></span></div>
+      </article>
+    </section>
+  </main>
+</body>
+</html>
