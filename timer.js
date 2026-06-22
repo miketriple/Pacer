@@ -4,6 +4,30 @@
    Survives mobile backgrounding by anchoring to wall-clock time.
    ============================================================ */
 
+/**
+ * Pure timeline math (no DOM, no clock reads) shared by the engine's normal
+ * advance and its background-recovery. Given the absolute start of segment
+ * `fromIndex`, walk forward through any timed segments that `now` has already
+ * passed and return the segment `now` falls in, plus that segment's *exact*
+ * absolute start. Stops at a manual (duration 0) segment — those have no fixed
+ * length — and `index === segments.length` means the timeline is exhausted
+ * (caller should complete). Anchoring starts to this fixed timeline is what keeps
+ * the UI in lockstep with the audio schedule instead of drifting by accumulated
+ * polling latency.
+ */
+export function resolveActiveSegment(fromIndex, fromStartTime, segments, now) {
+  let index = fromIndex;
+  let startTime = fromStartTime;
+  while (index < segments.length) {
+    const dur = segments[index]?.duration || 0;
+    if (dur === 0) break;                      // manual step — can't auto-advance past it
+    if (now < startTime + dur * 1000) break;   // now is within this segment
+    startTime += dur * 1000;
+    index++;
+  }
+  return { index, startTime };
+}
+
 export class TimerEngine {
   /**
    * @param {object} callbacks
@@ -126,14 +150,22 @@ export class TimerEngine {
     this._pausedAt       = null;
   }
 
-  _startSegment(idx) {
+  /**
+   * @param {number} idx
+   * @param {number} [startTime]  Absolute wall-clock start for this segment. A
+   *   natural advance passes the previous segment's exact end (anchor + duration)
+   *   so the UI rides the same fixed timeline as the native audio and never
+   *   accumulates polling/`setInterval` slip. Defaults to "now" for fresh anchors
+   *   (pace start, manual advance, user jumps, background recovery).
+   */
+  _startSegment(idx, startTime = Date.now()) {
     const seg = this.flatSegments[idx];
     if (!seg) { this._complete(); return; }
 
     clearInterval(this._interval);
     this._segIndex     = idx;
     this._segDuration  = seg.duration || 0;
-    this._segStartTime = Date.now();
+    this._segStartTime = startTime;
     this._running      = true;
 
     this.callbacks.onSegmentStart?.(seg, idx);
@@ -178,13 +210,16 @@ export class TimerEngine {
 
   _advance() {
     clearInterval(this._interval);
+    // Anchor the next segment to this one's exact end — not Date.now() at
+    // detection time — so polling latency can't compound into UI-vs-audio drift.
+    const nextStartTime = this._segStartTime + this._segDuration * 1000;
     this._segIndex++;
     if (this._segIndex >= this.flatSegments.length) {
       this._complete();
     } else {
       // One animation frame before starting the next segment so the browser
       // can paint the 100% / "0:00" final state of the segment that just ended.
-      requestAnimationFrame(() => this._startSegment(this._segIndex));
+      requestAnimationFrame(() => this._startSegment(this._segIndex, nextStartTime));
     }
   }
 
@@ -223,34 +258,21 @@ export class TimerEngine {
     if (document.visibilityState !== 'visible') return;
     if (!this._running || this._isPaused) return;
 
-    const now    = Date.now();
-    let idx      = this._segIndex;
-    let anchor   = this._segStartTime;
+    // Walk forward (same absolute-timeline math the normal advance uses) to find
+    // where wall-clock time actually places us after being backgrounded.
+    const { index, startTime } = resolveActiveSegment(
+      this._segIndex, this._segStartTime, this.flatSegments, Date.now());
 
-    // Walk forward through any segments that would have completed
-    while (idx < this.flatSegments.length) {
-      const seg     = this.flatSegments[idx];
-      if (seg.duration === 0) break;                      // manual step — stop here
-      const elapsed = (now - anchor) / 1000;
-      if (elapsed < seg.duration)  break;                 // still in this segment
-      anchor += seg.duration * 1000;
-      idx++;
-    }
-
-    if (idx >= this.flatSegments.length) {
+    if (index >= this.flatSegments.length) {
       this._complete();
       return;
     }
 
-    if (idx !== this._segIndex) {
-      // Jumped one or more segments while backgrounded — resume at the right spot
-      this._segIndex    = idx;
-      this._segDuration = this.flatSegments[idx].duration || 0;
-      this._segStartTime = anchor;
-      clearInterval(this._interval);
-      this.callbacks.onSegmentStart?.(this.flatSegments[idx], idx);
-      this._scheduleInterval();
+    if (index !== this._segIndex) {
+      // Jumped one or more segments while backgrounded — resume at the right spot,
+      // anchored to the segment's true start so it stays in lockstep with audio.
+      this._startSegment(index, startTime);
     }
-    // If same segment, no action needed — _tick() already reads from wall-clock time
+    // Same segment → _tick() already reads wall-clock from _segStartTime.
   }
 }

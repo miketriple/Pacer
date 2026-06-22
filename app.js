@@ -1360,7 +1360,11 @@ function resumeTimer() {
     const remaining = runtime.cueSchedule
       .filter(c => c.delayMs > elapsedMs)
       .map(c => ({ ...c, delayMs: c.delayMs - elapsedMs }));
-    runtime.chunkStartMs = Date.now();   // reset — remaining cues are now relative to now
+    // Do NOT reset chunkStartMs here: cueSchedule keeps its original delays and
+    // chunkStartMs is the pause-shifted epoch they're relative to, so the math
+    // stays correct across repeated pauses. (Resetting it without rebasing
+    // cueSchedule re-fired already-played cues — the "cues back up / fire late
+    // after a few pauses" bug.)
     startNativeTimerWithSchedule(remaining, runtime.pace?.name || 'Pacer');
   }
 }
