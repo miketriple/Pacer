@@ -120,7 +120,7 @@ runtime.timer = new TimerEngine({
     updateTimerDisplay();                                          // sets ring to full
     requestAnimationFrame(() => { ring.style.transition = ''; }); // restore
     animatePhaseTransition();
-    boostRingFx(1.0);                                              // full swell on a step change
+    exciteRingFx(0.7, 0.4, 220);                                  // brief strong accent on a step change
 
     // Native timer: route all audio through Android TTS because Web Speech API
     // is unreliable in the Capacitor WebView.
@@ -1215,8 +1215,11 @@ function animatePhaseTransition() {
 // both rings, and runs only while the timer screen is active.
 const ringFx = {
   raf: 0,
-  t: 0,        // time accumulator (≈ seconds) for slow drift + resting breath
-  energy: 0,   // 0 calm → 1 energized; spikes on events, decays each frame
+  t: 0,          // time accumulator (≈ seconds) for slow drift + resting breath
+  spike: 0,      // one-shot onset punch (fades fast) — the attack of each event
+  hold: 0,       // sustain level held while an utterance is still being spoken
+  holdUntil: 0,  // ringFx.t value through which `hold` applies
+  energy: 0,     // smoothed 0 calm → 1 energized; what actually drives the rings
   rings: [
     { id: 'decor-wave-1', r: 99,  waves: 7, baseAmp: 1.4, boostAmp: 5.5, baseOp: .14, boostOp: .55, drift:  0.16, breath: 0.9 },
     { id: 'decor-wave-2', r: 103, waves: 9, baseAmp: 1.1, boostAmp: 4.0, baseOp: .10, boostOp: .40, drift: -0.11, breath: 1.3 },
@@ -1237,7 +1240,15 @@ function wavePath(r, waves, amp, phase) {
 
 function ringFxFrame() {
   ringFx.t += 0.016;
-  ringFx.energy = ringFx.energy < 0.002 ? 0 : ringFx.energy * 0.93;   // ease back to calm
+  // Envelope: a fast-decaying onset spike plus a sustain that holds while the
+  // current utterance is still being spoken, so the swell lasts about as long as
+  // the words. energy chases the target — snappy attack, gentle release.
+  ringFx.spike *= 0.88;
+  if (ringFx.spike < 0.002) ringFx.spike = 0;
+  const sustain = ringFx.t < ringFx.holdUntil ? ringFx.hold : 0;
+  const target  = Math.min(1, sustain + ringFx.spike);
+  ringFx.energy += (target - ringFx.energy) * (target > ringFx.energy ? 0.3 : 0.08);
+  if (ringFx.energy < 0.002 && target === 0) ringFx.energy = 0;
   const e = ringFx.energy;
   for (const ring of ringFx.rings) {
     const el = document.getElementById(ring.id);
@@ -1252,7 +1263,34 @@ function ringFxFrame() {
 
 function startRingFx() { if (!ringFx.raf) ringFxFrame(); }            // self-schedules the loop
 function stopRingFx()  { if (ringFx.raf) { cancelAnimationFrame(ringFx.raf); ringFx.raf = 0; } }
-function boostRingFx(amount) { ringFx.energy = Math.min(1, ringFx.energy + amount); }
+/**
+ * Excite the decoration rings for an event. `spike` is a one-shot onset punch
+ * (fades fast); `holdLevel` is sustained for `durationMs` so a long cue swells
+ * longer than a short countdown number. Overlapping excitations add their spikes
+ * and keep the longer/stronger hold (e.g. a step change landing on the opening cue).
+ */
+function exciteRingFx(spike, holdLevel, durationMs) {
+  ringFx.spike = Math.min(1, ringFx.spike + spike);
+  const until = ringFx.t + durationMs / 1000;
+  if (ringFx.t < ringFx.holdUntil) {
+    ringFx.hold      = Math.max(ringFx.hold, holdLevel);
+    ringFx.holdUntil = Math.max(ringFx.holdUntil, until);
+  } else {
+    ringFx.hold      = holdLevel;
+    ringFx.holdUntil = until;
+  }
+}
+
+/**
+ * Rough spoken-duration estimate (ms) from text length, so the ring swell lasts
+ * about as long as the utterance. Web could use the real onend, but the APK (the
+ * real target) plays audio natively and hands JS only a no-op, so a text estimate
+ * is what works on both. ~16 chars/sec ≈ a calm TTS rate.
+ */
+function estimateSpeechMs(text) {
+  const chars = (text || '').trim().length;
+  return Math.min(4000, Math.max(350, 250 + chars * 60));
+}
 
 /**
  * Set the play/pause button to show either ⏸ (currently playing → tap to pause)
@@ -1607,7 +1645,10 @@ async function init() {
   await loadTemplates();
   await initPlatform();
   runtime.cues.setVoice(state.settings.voiceName);
-  runtime.cues.setOnSpeak(() => boostRingFx(0.55));   // each cue swells the decoration rings
+  // Each spoken cue swells the rings for ~its duration; countdown numbers are
+  // briefer and a touch gentler than protected cues.
+  runtime.cues.setOnSpeak((text, isCountdown) =>
+    exciteRingFx(isCountdown ? 0.18 : 0.28, isCountdown ? 0.40 : 0.52, estimateSpeechMs(text)));
   syncPaces();
   // Skip Service Worker inside Capacitor — it uses its own asset serving layer.
   if ('serviceWorker' in navigator && !window.Capacitor?.isNativePlatform()) {
