@@ -1028,7 +1028,7 @@ function startPace(pace) {
   document.getElementById('timer-pace-name').textContent = pace.name || 'Pacer';
   buildOverallDots(flat.length);
   showScreen('timer');
-  startRingFx();                 // begin the reactive ring animation loop
+  _setTimerPausedVisual(false);  // begin the reactive ring loop; clear any lingering paused visual
   runtime.timer.start(flat);
 
   if (window.Capacitor?.isNativePlatform()) {
@@ -1077,13 +1077,17 @@ function updateTimerDisplay(tickData = null) {
   const ringFill = document.getElementById('timer-ring-fill');
 
   if (isManual) {
-    // Count UP, calm full ring, show the "Done — Next Step" button.
+    // Count UP and show the "Done — Next Step" button. The ring becomes a short
+    // arc that orbits slowly (.is-manual) — an honest "active, no fixed end"
+    // signal, rather than a static full ring (which read as done/stalled).
     clockEl.textContent = formatTime(elapsedInSeg);
     subEl.textContent   = 'elapsed';
+    ringFill.classList.add('is-manual');
     ringFill.style.strokeDashoffset = 0;
     if (manualBtn) manualBtn.style.display = 'flex';
   } else {
     if (manualBtn) manualBtn.style.display = 'none';
+    ringFill.classList.remove('is-manual');
     // Ceil keeps the clock at "N" for the full Nth second — changes on clean
     // whole-second boundaries rather than at 0.5 s marks. The ring uses raw
     // float elapsed so it depletes smoothly and independently.
@@ -1200,10 +1204,26 @@ function _setPauseBtnIcon(isPaused) {
   btn.setAttribute('title',      label);
 }
 
+/**
+ * Mirror the paused state visually so it reads at a glance: freeze the decoration
+ * waves (stop their RAF loop and dim them) and let CSS desaturate the ring.
+ * Reversed on resume, and on any jump that auto-unpauses the timer.
+ */
+function _setTimerPausedVisual(isPaused) {
+  document.getElementById('screen-timer').classList.toggle('is-paused', isPaused);
+  if (isPaused) {
+    stopRingFx();
+    document.querySelectorAll('.decor-ring-svg').forEach(el => { el.style.opacity = '0.05'; });
+  } else {
+    startRingFx();
+  }
+}
+
 function pauseTimer() {
   runtime.timer.pause();
   _setPauseBtnIcon(true);
   document.getElementById('timer-clock').classList.add('paused');
+  _setTimerPausedVisual(true);
   if (window.Capacitor?.isNativePlatform()) {
     runtime.pausedAtMs = Date.now();   // record when pause began for epoch adjustment on resume
     stopNativeTimer();
@@ -1214,6 +1234,7 @@ function resumeTimer() {
   runtime.timer.resume();
   _setPauseBtnIcon(false);
   document.getElementById('timer-clock').classList.remove('paused');
+  _setTimerPausedVisual(false);
   if (window.Capacitor?.isNativePlatform() && runtime.cueSchedule) {
     // Shift runtime.chunkStartMs forward by the pause duration so that
     // Date.now() - runtime.chunkStartMs continues to equal "timer-elapsed ms"
@@ -1240,6 +1261,7 @@ function resumeTimer() {
 function _syncPlayingUi() {
   _setPauseBtnIcon(false);
   document.getElementById('timer-clock').classList.remove('paused');
+  _setTimerPausedVisual(false);
 }
 
 /** Restart the current step from its beginning. */

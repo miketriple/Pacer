@@ -375,7 +375,19 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg-gra
 .decor-2 path { stroke:var(--accent2); }
 .timer-ring { position:relative; z-index:1; width:100%; height:100%; display:block; transform:rotate(-90deg); }
 .timer-ring-track { fill:none; stroke:var(--surface2); stroke-width:6; }
-.timer-ring-fill { fill:none; stroke:var(--accent); stroke-width:6; stroke-linecap:round; stroke-dasharray:578.05; stroke-dashoffset:0; transition:stroke-dashoffset .26s linear; }
+.timer-ring-fill { fill:none; stroke:url(#ring-grad); stroke-width:6; stroke-linecap:round; stroke-dasharray:578.05; stroke-dashoffset:0; filter:drop-shadow(0 0 5px var(--accent-glow)); transition:stroke-dashoffset .26s linear; }
+/* Gradient stops re-theme via the accent vars; --accent2 defaults to --accent, so
+   on single-accent themes the gradient is simply a solid accent stroke. */
+.ring-grad-a { stop-color:var(--accent); }
+.ring-grad-b { stop-color:var(--accent2); }
+/* Manual (open-ended) step: a short accent arc orbits slowly instead of a full
+   ring — an honest "active, no fixed end" signal that implies no % complete. */
+.timer-ring-fill.is-manual { stroke-dasharray:150 428; transform-box:fill-box; transform-origin:center; animation:ringOrbit 4s linear infinite; }
+@keyframes ringOrbit { to { transform:rotate(360deg); } }
+/* Paused: still the screen so the state reads instantly — desaturate the ring and
+   drop its glow. The decoration waves are frozen separately, from JS. */
+.is-paused .timer-ring-fill { filter:saturate(.25) brightness(.5); }
+.is-paused .timer-ring-fill.is-manual { animation-play-state:paused; }
 .timer-clock-overlay { position:absolute; inset:0; z-index:2; display:flex; flex-direction:column; align-items:center; justify-content:center; }
 .timer-clock { font-family:'Share Tech Mono',monospace; font-size:clamp(44px,13vw,58px); color:var(--text); line-height:1; letter-spacing:.01em; }
 .timer-clock.paused { animation:pausedBlink 1.2s ease-in-out infinite; }
