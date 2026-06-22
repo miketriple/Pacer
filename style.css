@@ -374,6 +374,14 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg-gra
 .decor-2 path { stroke:var(--accent2); }
 .timer-ring { position:relative; z-index:1; width:100%; height:100%; display:block; transform:rotate(-90deg); }
 .timer-ring-track { fill:none; stroke:var(--surface2); stroke-width:6; }
+/* Inner concentric "rounds" ring — sits just inside the time ring and fills as a
+   multi-round group works through its repeats (driven by updateProgress). Uses
+   --accent2 so it reads as a companion to the time ring; hidden unless the active
+   section is a repeating group. */
+.timer-rounds-track { fill:none; stroke:var(--surface3); stroke-width:2.5; opacity:0; transition:opacity var(--transition); }
+.timer-rounds-fill  { fill:none; stroke:var(--accent2); stroke-width:2.5; stroke-linecap:round; stroke-dasharray:527.79; stroke-dashoffset:527.79; opacity:0; transition:stroke-dashoffset .26s linear, opacity var(--transition); }
+.has-rounds .timer-rounds-track { opacity:.45; }
+.has-rounds .timer-rounds-fill  { opacity:1; }
 .timer-ring-fill { fill:none; stroke:url(#ring-grad); stroke-width:6; stroke-linecap:round; stroke-dasharray:578.05; stroke-dashoffset:0; filter:drop-shadow(0 0 5px var(--accent-glow)); transition:stroke-dashoffset .26s linear; }
 /* Gradient stops re-theme via the accent vars; --accent2 defaults to --accent, so
    on single-accent themes the gradient is simply a solid accent stroke. */
@@ -394,10 +402,19 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg-gra
 .timer-clock-sub { font-size:12px; color:var(--text-muted); margin-top:7px; letter-spacing:.04em; min-height:14px; }
 
 .timer-cue-text { font-size:14px; color:var(--text); opacity:.78; line-height:1.4; max-width:300px; margin:0 auto 16px; min-height:20px; }
-.timer-overall-progress { display:flex; gap:5px; justify-content:center; flex-wrap:wrap; max-width:280px; margin:0 auto 10px; min-height:7px; }
+.timer-overall-progress { display:flex; gap:14px; justify-content:center; align-items:flex-start; flex-wrap:wrap; max-width:300px; margin:0 auto 10px; min-height:12px; }
+/* Each section is a cluster of dots; a repeating group's dots are tied together by
+   a faint underline that brightens to accent2 while it's the active section. */
+.prog-cluster { display:flex; gap:5px; align-items:center; position:relative; padding-bottom:5px; }
+.prog-cluster.is-group::after { content:''; position:absolute; left:1px; right:1px; bottom:0; height:1.5px; border-radius:1px; background:var(--text-muted); opacity:.3; transition:background var(--transition),opacity var(--transition); }
+.prog-cluster.is-group.is-active-section::after { background:var(--accent2); opacity:.7; }
 .overall-dot { width:7px; height:7px; border-radius:50%; background:var(--surface3); transition:background var(--transition); }
 .overall-dot.done { background:var(--accent2); opacity:.55; }
 .overall-dot.active { background:var(--accent); }
+/* Fallback for long ungrouped paces (> 24 steps): a compact count + slim line. */
+.prog-count { font-family:'Share Tech Mono',monospace; font-size:13px; color:var(--text-muted); letter-spacing:.04em; text-align:center; width:100%; margin-bottom:6px; }
+.prog-line { width:100%; max-width:240px; height:3px; border-radius:2px; background:var(--surface3); overflow:hidden; }
+.prog-line-fill { width:0; height:100%; background:var(--accent); border-radius:2px; transition:width .26s linear; }
 .timer-next { font-size:12px; color:var(--text-muted); opacity:.7; letter-spacing:.02em; }
 /* Bottom control bar: a 3-column grid keeps the transport group optically
    centered (empty edge | transport | End) while End sits offset at the trailing

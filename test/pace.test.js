@@ -7,7 +7,7 @@
 import { test }   from 'node:test';
 import assert     from 'node:assert/strict';
 import {
-  flattenItems, migratePace, paceMeta, regenIds, findStepById, colorHex,
+  flattenItems, buildRunStructure, migratePace, paceMeta, regenIds, findStepById, colorHex,
 } from '../pace.js';
 
 // ── flattenItems ─────────────────────────────────────────────
@@ -50,6 +50,49 @@ test('flattenItems — tags grouped steps with repeat metadata', () => {
 test('flattenItems — non-array input yields an empty array', () => {
   assert.deepEqual(flattenItems(undefined), []);
   assert.deepEqual(flattenItems(null), []);
+});
+
+// ── buildRunStructure ────────────────────────────────────────
+
+test('buildRunStructure — one unit per authored step, groups counted once', () => {
+  const items = [
+    { type: 'step', name: 'Warm-up', duration: 60 },
+    { type: 'group', name: 'Superset', repeats: 3, steps: [
+      { type: 'step', name: 'Pull', duration: 30 },
+      { type: 'step', name: 'Push', duration: 30 },
+      { type: 'step', name: 'Rest', duration: 30 },
+    ] },
+    { type: 'step', name: 'Finish', duration: 10 },
+  ];
+  const { units, sections, flat } = buildRunStructure(items);
+  assert.equal(units.length, 5);                 // 1 + 3 + 1 authored steps (not ×3)
+  assert.equal(sections.length, 3);
+  assert.equal(flat.length, 1 + 3 * 3 + 1);      // the group expands ×3 in the flat list
+});
+
+test('buildRunStructure — sections carry kind, rounds and unit span', () => {
+  const items = [{ type: 'group', name: 'Round', repeats: 8, steps: [
+    { type: 'step', name: 'In',  duration: 4 },
+    { type: 'step', name: 'Out', duration: 4 },
+  ] }];
+  const { sections, units } = buildRunStructure(items);
+  assert.equal(units.length, 2);
+  assert.deepEqual(sections[0], { name: 'Round', kind: 'group', unitStart: 0, unitCount: 2, totalRounds: 8 });
+});
+
+test('buildRunStructure — flat segments map back to unit and section', () => {
+  const items = [
+    { type: 'step', name: 'A', duration: 5 },
+    { type: 'group', name: 'G', repeats: 2, steps: [
+      { type: 'step', name: 'B', duration: 5 },
+      { type: 'step', name: 'C', duration: 5 },
+    ] },
+  ];
+  const { flat } = buildRunStructure(items);
+  // A = unit0/sec0; G round1: B=unit1,C=unit2; round2: B=unit1,C=unit2 (units repeat)
+  assert.deepEqual(flat.map(s => s._unitIndex),    [0, 1, 2, 1, 2]);
+  assert.deepEqual(flat.map(s => s._sectionIndex), [0, 1, 1, 1, 1]);
+  assert.deepEqual(flat.map(s => s._repeat),       [undefined, 1, 1, 2, 2]);
 });
 
 // ── migratePace ──────────────────────────────────────────────

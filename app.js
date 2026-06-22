@@ -10,7 +10,7 @@ import {
   STEP_COLORS,
   colorHex,
   makeBlankStep, makeBlankGroup,
-  flattenItems, paceMeta,
+  flattenItems, buildRunStructure, paceMeta,
   regenIds, migratePace, findStepById,
 } from './pace.js';
 import { TimerEngine  } from './timer.js';
@@ -66,6 +66,10 @@ let reorderMode = false;
 // updateTimerDisplay sets stroke-dashoffset between 0 (full ring) and RING_C (empty).
 const RING_C = 578.05;
 
+// Circumference of the inner "rounds" ring (2π·r, r=84). It fills as a multi-round
+// group works through its repeats — see updateProgress.
+const RING2_C = 527.79;
+
 // ============================================================
 // 3. RUNTIME — per-pace running state
 // ============================================================
@@ -88,6 +92,7 @@ const RING_C = 578.05;
  */
 const runtime = {
   pace:          null,
+  structure:     null,   // { units, sections } for run-view progress; set in startPace
   timer:         null,   // set just below, after CueScheduler exists
   cues:          new CueScheduler(),
   cueSchedule:   null,
@@ -216,6 +221,7 @@ function _resetRuntimeForNoPace() {
   runtime.chunkStartMs  = 0;
   runtime.pausedAtMs    = 0;
   runtime.isUserJumping = false;
+  runtime.structure     = null;
 }
 
 // Dev console access — remove before shipping to production
@@ -1020,13 +1026,14 @@ function savePaceFromBuilder() {
 // ============================================================
 
 function startPace(pace) {
-  const flat = flattenItems(pace.items);
+  const { flat, units, sections } = buildRunStructure(pace.items);
   if (!flat.length) { alert('This pace has no steps.'); return; }
 
   runtime.pace = pace;
+  runtime.structure = { units, sections };
   runtime.cues.setVoice(state.settings.voiceName);
   document.getElementById('timer-pace-name').textContent = pace.name || 'Pacer';
-  buildOverallDots(flat.length);
+  buildProgress(units, sections);
   showScreen('timer');
   _setTimerPausedVisual(false);  // begin the reactive ring loop; clear any lingering paused visual
   runtime.timer.start(flat);
@@ -1098,11 +1105,7 @@ function updateTimerDisplay(tickData = null) {
     ringFill.style.strokeDashoffset = RING_C * frac;   // 0 = full, RING_C = empty
   }
 
-  document.querySelectorAll('.overall-dot').forEach((dot, i) => {
-    dot.classList.remove('done', 'active');
-    if (i < idx)        dot.classList.add('done');
-    else if (i === idx) dot.classList.add('active');
-  });
+  updateProgress(seg, isManual, elapsedInSeg);
 
   const next = runtime.timer.flatSegments[idx + 1];
   document.getElementById('timer-next').textContent = next
@@ -1110,14 +1113,85 @@ function updateTimerDisplay(tickData = null) {
     : 'Final step';
 }
 
-function buildOverallDots(count) {
+/**
+ * Build the structured progress display under the ring: one dot per AUTHORED
+ * step, grouped into per-section clusters (a repeating group's dots share a tie
+ * underline). Repeats never multiply dots — the rounds-ring shows those. Paces
+ * with too many ungrouped steps fall back to a compact "k / N" + slim line.
+ */
+function buildProgress(units, sections) {
   const container = document.getElementById('timer-overall-progress');
   container.innerHTML = '';
-  const max = Math.min(count, 40);
-  for (let i = 0; i < max; i++) {
-    const dot = document.createElement('div');
-    dot.className = 'overall-dot';
-    container.appendChild(dot);
+
+  if (units.length > 24) {
+    container.dataset.mode = 'count';
+    container.innerHTML =
+      '<div class="prog-count" id="prog-count-num"></div>' +
+      '<div class="prog-line"><div class="prog-line-fill" id="prog-line-fill"></div></div>';
+    return;
+  }
+
+  container.dataset.mode = 'dots';
+  sections.forEach((section, si) => {
+    if (section.unitCount === 0) return;
+    const cluster = document.createElement('div');
+    cluster.className = 'prog-cluster' +
+      (section.kind === 'group' && section.totalRounds > 1 ? ' is-group' : '');
+    cluster.dataset.section = si;
+    for (let u = section.unitStart; u < section.unitStart + section.unitCount; u++) {
+      const dot = document.createElement('div');
+      dot.className = 'overall-dot';
+      dot.dataset.unit = u;
+      cluster.appendChild(dot);
+    }
+    container.appendChild(cluster);
+  });
+}
+
+/**
+ * Per-tick progress update: mark dot states (or the count/line fallback) from the
+ * segment's _unitIndex, and drive the concentric rounds-ring for multi-round
+ * groups. Dot "done/active" is scoped to the current pass (unit indices repeat
+ * each round), so a group's cluster re-fills each round while the rounds-ring
+ * tracks the macro repeat.
+ */
+function updateProgress(seg, isManual, elapsedInSeg) {
+  const container  = document.getElementById('timer-overall-progress');
+  const struct     = runtime.structure;
+  const activeUnit = seg._unitIndex ?? 0;
+
+  if (container.dataset.mode === 'count') {
+    const total = struct?.units.length || 0;
+    const numEl = document.getElementById('prog-count-num');
+    if (numEl) numEl.textContent = `${activeUnit + 1} / ${total}`;
+    const fillEl    = document.getElementById('prog-line-fill');
+    const flatTotal = runtime.timer.flatSegments.length || 1;
+    if (fillEl) fillEl.style.width =
+      `${Math.min(100, ((runtime.timer.segmentIndex + 1) / flatTotal) * 100)}%`;
+  } else {
+    container.querySelectorAll('.overall-dot').forEach(dot => {
+      const u = Number(dot.dataset.unit);
+      dot.classList.toggle('done',   u < activeUnit);
+      dot.classList.toggle('active', u === activeUnit);
+    });
+    container.querySelectorAll('.prog-cluster').forEach(c => {
+      c.classList.toggle('is-active-section', Number(c.dataset.section) === seg._sectionIndex);
+    });
+  }
+
+  // Concentric rounds-ring: fills (round-1 + within-round)/totalRounds for a
+  // multi-round group; hidden otherwise.
+  const section = struct?.sections[seg._sectionIndex];
+  const fill    = document.getElementById('timer-rounds-fill');
+  const screen  = document.getElementById('screen-timer');
+  if (section && section.kind === 'group' && section.totalRounds > 1 && fill) {
+    const stepInRound = activeUnit - section.unitStart;
+    const within      = isManual ? 0 : (seg.duration > 0 ? Math.min(1, elapsedInSeg / seg.duration) : 0);
+    const roundFrac   = ((seg._repeat - 1) + (stepInRound + within) / section.unitCount) / section.totalRounds;
+    fill.style.strokeDashoffset = RING2_C * (1 - Math.min(1, Math.max(0, roundFrac)));
+    screen.classList.add('has-rounds');
+  } else {
+    screen.classList.remove('has-rounds');
   }
 }
 

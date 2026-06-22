@@ -74,6 +74,49 @@ export function flattenItems(items) {
   return result;
 }
 
+/**
+ * Like flattenItems, but also returns the AUTHORED structure for the run view:
+ * one "unit" per authored step (a group is counted once, not ×repeats) plus the
+ * section list. Each flat segment is tagged with _unitIndex (which authored unit
+ * it belongs to) and _sectionIndex, so the running UI can map its live position
+ * back onto the structure. flattenItems is left untouched — other call sites
+ * (home cards, paceMeta) depend on its exact passthrough output.
+ *
+ *   units    — [{ sectionIndex, name, color }]                    one per dot
+ *   sections — [{ name, kind:'step'|'group', unitStart, unitCount, totalRounds }]
+ *   flat     — flattenItems-shaped segments + _unitIndex/_sectionIndex
+ */
+export function buildRunStructure(items) {
+  const flat = [], units = [], sections = [];
+  if (!Array.isArray(items)) return { flat, units, sections };
+
+  for (const item of items) {
+    const sectionIndex = sections.length;
+    if (item.type === 'step') {
+      const unitStart = units.length;
+      units.push({ sectionIndex, name: item.name, color: item.color });
+      sections.push({ name: item.name, kind: 'step', unitStart, unitCount: 1, totalRounds: 1 });
+      flat.push({ ...item, _unitIndex: unitStart, _sectionIndex: sectionIndex });
+    } else if (item.type === 'group') {
+      const steps     = item.steps || [];
+      const repeats   = item.repeats || 1;
+      const unitStart = units.length;
+      steps.forEach(step => units.push({ sectionIndex, name: step.name, color: step.color }));
+      sections.push({ name: item.name, kind: 'group', unitStart, unitCount: steps.length, totalRounds: repeats });
+      for (let r = 0; r < repeats; r++) {
+        steps.forEach((step, si) => {
+          flat.push({
+            ...step,
+            _groupName: item.name, _repeat: r + 1, _totalRepeats: repeats,
+            _unitIndex: unitStart + si, _sectionIndex: sectionIndex,
+          });
+        });
+      }
+    }
+  }
+  return { flat, units, sections };
+}
+
 /** Human-readable summary: "5 steps · 03:20" */
 export function paceMeta(pace) {
   const steps     = flattenItems(pace.items);
