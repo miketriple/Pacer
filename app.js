@@ -1234,19 +1234,31 @@ function wavePath(r, waves, amp, phase) {
   return d + 'Z';
 }
 
-// Drive the main ring fill each frame so depletion is smooth and the step-change
-// reset eases into a quick "wind back up" instead of snapping empty→full. The
-// light lerp toward the time-based target both smooths per-frame motion and turns
-// the boundary jump into ~0.25s of refill. Manual steps are left to the CSS orbit.
+// Drive the main ring fill each frame. Each step does a brief eased "wind back
+// up" to full, then depletes linearly to empty over the rest — so it reaches BOTH
+// full and empty, and the end→start hand-off is seamless (both sides sit at empty
+// across the boundary, then the new step winds up). Manual steps use the CSS orbit.
+// Splitting wind-up from depletion (rather than easing toward the moving depletion
+// target) is what lets it actually reach full instead of intercepting it partway.
+const RING_REFILL_S = 0.32;   // seconds to wind the ring back up to full at a step start
+const easeInOut = p => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
 function updateRingFillFrame() {
   const t = runtime.timer;
   const ring = document.getElementById('timer-ring-fill');
   if (!ring || !t?.isRunning) return;
   if (t.isManual) { _ringOffset = 0; return; }   // CSS orbit owns the offset here
-  const dur  = t.segDuration;
-  const frac = dur > 0 ? Math.min(1, t.elapsedInSegment / dur) : 1;
-  const targetOffset = RING_C * frac;             // 0 = full, RING_C = empty
-  _ringOffset += (targetOffset - _ringOffset) * 0.2;
+  const dur     = t.segDuration;
+  const elapsed = t.elapsedInSegment;
+  let frac;                                       // 0 = full, 1 = empty
+  if (dur <= 0) {
+    frac = 0;
+  } else {
+    const refillS = Math.min(RING_REFILL_S, dur * 0.4);   // cap for very short steps
+    frac = elapsed < refillS
+      ? 1 - easeInOut(elapsed / refillS)                       // wind up: empty → full
+      : Math.min(1, (elapsed - refillS) / (dur - refillS));    // deplete: full → empty
+  }
+  _ringOffset = RING_C * frac;
   ring.style.strokeDashoffset = _ringOffset.toFixed(1);
 }
 
