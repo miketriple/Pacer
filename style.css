@@ -382,7 +382,7 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg-gra
 .timer-rounds-fill  { fill:none; stroke:var(--accent2); stroke-width:2.5; stroke-linecap:round; stroke-dasharray:527.79; stroke-dashoffset:527.79; opacity:0; transition:stroke-dashoffset .26s linear, opacity var(--transition); }
 .has-rounds .timer-rounds-track { opacity:.45; }
 .has-rounds .timer-rounds-fill  { opacity:1; }
-.timer-ring-fill { fill:none; stroke:url(#ring-grad); stroke-width:6; stroke-linecap:round; stroke-dasharray:578.05; stroke-dashoffset:0; filter:drop-shadow(0 0 5px var(--accent-glow)); transition:stroke-dashoffset .26s linear; }
+.timer-ring-fill { fill:none; stroke:url(#ring-grad); stroke-width:6; stroke-linecap:round; stroke-dasharray:578.05; stroke-dashoffset:0; filter:drop-shadow(0 0 5px var(--accent-glow)); }
 /* Gradient stops re-theme via the accent vars; --accent2 defaults to --accent, so
    on single-accent themes the gradient is simply a solid accent stroke. */
 .ring-grad-a { stop-color:var(--accent); }

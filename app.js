@@ -70,6 +70,11 @@ const RING_C = 578.05;
 // group works through its repeats — see updateProgress.
 const RING2_C = 527.79;
 
+// Smoothed main ring-fill dashoffset. updateRingFillFrame eases this toward the
+// time-based target every frame, which both smooths depletion and turns the
+// step-change reset into a quick refill instead of an empty→full snap.
+let _ringOffset = 0;
+
 // ============================================================
 // 3. RUNTIME — per-pace running state
 // ============================================================
@@ -112,13 +117,9 @@ runtime.timer = new TimerEngine({
 
   onSegmentStart(seg, idx) {
     runtime.cues.arm(seg);
-    // Snap the ring to full (offset 0) without transition so it doesn't animate
-    // from the previous segment's depleted state; restore the transition one
-    // frame later so this segment's ticks deplete it smoothly.
-    const ring = document.getElementById('timer-ring-fill');
-    ring.style.transition = 'none';
-    updateTimerDisplay();                                          // sets ring to full
-    requestAnimationFrame(() => { ring.style.transition = ''; }); // restore
+    // Labels/clock/dots refresh here; the ring fill itself is driven every frame
+    // by updateRingFillFrame, which eases the step-change refill (no snap).
+    updateTimerDisplay();
     animatePhaseTransition();
     exciteRingFx(0.7, 0.4, 220);                                  // brief strong accent on a step change
 
@@ -190,14 +191,10 @@ runtime.timer = new TimerEngine({
       if (tc !== 'silent') {
         runtime.cues.countdown(secondsLeft, thresh);
       }
-      // Segment complete — bypass transition and snap the ring to empty so it
-      // visually depletes fully before the next segment resets it to full.
-      if (secondsLeft <= 0) {
-        const ring = document.getElementById('timer-ring-fill');
-        ring.style.transition = 'none';
-        ring.style.strokeDashoffset = RING_C;
-        return;
-      }
+      // Step ending — skip the rest of this tick's render. The ring fill is
+      // driven each frame and onSegmentStart paints the next step; returning here
+      // also avoids a one-frame "00:00" flash before the advance.
+      if (secondsLeft <= 0) return;
     }
 
     updateTimerDisplay(tickData);
@@ -1034,6 +1031,7 @@ function startPace(pace) {
   runtime.cues.setVoice(state.settings.voiceName);
   document.getElementById('timer-pace-name').textContent = pace.name || 'Pacer';
   buildProgress(units, sections);
+  _ringOffset = 0;               // ring starts full; updateRingFillFrame drives it from here
   showScreen('timer');
   _setTimerPausedVisual(false);  // begin the reactive ring loop; clear any lingering paused visual
   runtime.timer.start(flat);
@@ -1096,13 +1094,11 @@ function updateTimerDisplay(tickData = null) {
     if (manualBtn) manualBtn.style.display = 'none';
     ringFill.classList.remove('is-manual');
     // Ceil keeps the clock at "N" for the full Nth second — changes on clean
-    // whole-second boundaries rather than at 0.5 s marks. The ring uses raw
-    // float elapsed so it depletes smoothly and independently.
+    // whole-second boundaries rather than at 0.5 s marks. (The ring fill itself
+    // is driven each frame by updateRingFillFrame, independent of this clock.)
     const displaySeconds = Math.max(0, Math.ceil(secondsLeft));
     clockEl.textContent  = formatTime(displaySeconds);
     subEl.textContent    = 'of ' + formatTime(seg.duration);
-    const frac = seg.duration > 0 ? Math.min(1, elapsedInSeg / seg.duration) : 1;
-    ringFill.style.strokeDashoffset = RING_C * frac;   // 0 = full, RING_C = empty
   }
 
   updateProgress(seg, isManual, elapsedInSeg);
@@ -1238,8 +1234,25 @@ function wavePath(r, waves, amp, phase) {
   return d + 'Z';
 }
 
+// Drive the main ring fill each frame so depletion is smooth and the step-change
+// reset eases into a quick "wind back up" instead of snapping empty→full. The
+// light lerp toward the time-based target both smooths per-frame motion and turns
+// the boundary jump into ~0.25s of refill. Manual steps are left to the CSS orbit.
+function updateRingFillFrame() {
+  const t = runtime.timer;
+  const ring = document.getElementById('timer-ring-fill');
+  if (!ring || !t?.isRunning) return;
+  if (t.isManual) { _ringOffset = 0; return; }   // CSS orbit owns the offset here
+  const dur  = t.segDuration;
+  const frac = dur > 0 ? Math.min(1, t.elapsedInSegment / dur) : 1;
+  const targetOffset = RING_C * frac;             // 0 = full, RING_C = empty
+  _ringOffset += (targetOffset - _ringOffset) * 0.2;
+  ring.style.strokeDashoffset = _ringOffset.toFixed(1);
+}
+
 function ringFxFrame() {
   ringFx.t += 0.016;
+  updateRingFillFrame();
   // Envelope: a fast-decaying onset spike plus a sustain that holds while the
   // current utterance is still being spoken, so the swell lasts about as long as
   // the words. energy chases the target — snappy attack, gentle release.

@@ -132,6 +132,16 @@ export class TimerEngine {
 
   get isPaused()      { return this._isPaused; }
   get segmentIndex()  { return this._segIndex;  }
+  get isRunning()     { return this._running; }
+  get segDuration()   { return this._segDuration; }
+  get isManual()      { return this._running && this._segDuration === 0; }
+
+  /** Seconds elapsed in the current segment (frozen while paused). */
+  get elapsedInSegment() {
+    if (!this._segStartTime) return 0;
+    const ref = (this._isPaused && this._pausedAt) ? this._pausedAt : Date.now();
+    return Math.max(0, (ref - this._segStartTime) / 1000);
+  }
 
   get totalElapsedSeconds() {
     if (!this._running || !this._totalStartTime) return 0;
