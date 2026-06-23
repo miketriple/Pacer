@@ -1234,32 +1234,33 @@ function wavePath(r, waves, amp, phase) {
   return d + 'Z';
 }
 
-// Drive the main ring fill each frame. Each step does a brief eased "wind back
-// up" to full, then depletes linearly to empty over the rest — so it reaches BOTH
-// full and empty, and the end→start hand-off is seamless (both sides sit at empty
-// across the boundary, then the new step winds up). Manual steps use the CSS orbit.
-// Splitting wind-up from depletion (rather than easing toward the moving depletion
-// target) is what lets it actually reach full instead of intercepting it partway.
-const RING_REFILL_S = 0.32;   // seconds to wind the ring back up to full at a step start
+// Drive the main ring fill each frame. The arc only ever moves ONE way — a
+// forward depletion (full→empty) kept in time with the cues. The empty→full reset
+// between steps is hidden by a quick opacity cross-fade (fade out as a step ends,
+// fade in as the next begins), so the reset is never seen as backwards motion.
+// Manual steps use the CSS orbit.
+const RING_FADE_S = 0.28;   // seconds of opacity fade at each end of a step (masks the reset)
 const easeInOut = p => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
 function updateRingFillFrame() {
   const t = runtime.timer;
   const ring = document.getElementById('timer-ring-fill');
   if (!ring || !t?.isRunning) return;
-  if (t.isManual) { _ringOffset = 0; return; }   // CSS orbit owns the offset here
+  if (t.isManual) { ring.style.opacity = '1'; _ringOffset = 0; return; }   // CSS orbit owns the offset
   const dur     = t.segDuration;
   const elapsed = t.elapsedInSegment;
-  let frac;                                       // 0 = full, 1 = empty
-  if (dur <= 0) {
-    frac = 0;
-  } else {
-    const refillS = Math.min(RING_REFILL_S, dur * 0.4);   // cap for very short steps
-    frac = elapsed < refillS
-      ? 1 - easeInOut(elapsed / refillS)                       // wind up: empty → full
-      : Math.min(1, (elapsed - refillS) / (dur - refillS));    // deplete: full → empty
-  }
+  // Forward depletion: full (0) → empty (RING_C) across the step, in time.
+  const frac = dur > 0 ? Math.min(1, Math.max(0, elapsed / dur)) : 0;
   _ringOffset = RING_C * frac;
   ring.style.strokeDashoffset = _ringOffset.toFixed(1);
+  // Cross-fade the reset: opacity dips to 0 right at each boundary, where the
+  // offset silently snaps empty→full — so the reset is never seen as motion.
+  const fadeS = dur > 0 ? Math.min(RING_FADE_S, dur * 0.35) : 0;
+  let op = 1;
+  if (fadeS > 0) {
+    if (elapsed < fadeS)            op = easeInOut(elapsed / fadeS);
+    else if (dur - elapsed < fadeS) op = easeInOut(Math.max(0, dur - elapsed) / fadeS);
+  }
+  ring.style.opacity = op.toFixed(3);
 }
 
 function ringFxFrame() {
@@ -1351,6 +1352,7 @@ function _setTimerPausedVisual(isPaused) {
   if (isPaused) {
     stopRingFx();
     document.querySelectorAll('.decor-ring-svg').forEach(el => { el.style.opacity = '0.05'; });
+    document.getElementById('timer-ring-fill').style.opacity = '1';  // un-freeze any mid-fade
   } else {
     startRingFx();
   }
