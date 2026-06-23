@@ -1234,12 +1234,13 @@ function wavePath(r, waves, amp, phase) {
   return d + 'Z';
 }
 
-// Drive the main ring fill each frame. The arc only ever moves ONE way — a
-// forward depletion (full→empty) kept in time with the cues. The empty→full reset
-// between steps is hidden by a quick opacity cross-fade (fade out as a step ends,
-// fade in as the next begins), so the reset is never seen as backwards motion.
-// Manual steps use the CSS orbit.
-const RING_FADE_S = 0.28;   // seconds of opacity fade at each end of a step (masks the reset)
+// Drive the main ring fill each frame. The ring FILLS clockwise (empty → full) so
+// it COMPLETES the circle near the step's end — the closure the eye wants — then
+// holds full for a beat and dissolves (fades out) so the next step fills fresh.
+// All forward motion: the arc only ever grows; the reset is the dissolve, never a
+// reverse sweep. Self-contained per step, so jumps just fill fresh. Manual = orbit.
+const RING_TAIL_S = 0.34;   // reserved at each step's end for the completion hold + dissolve
+const RING_HOLD_S = 0.14;   // how long the completed circle holds at full before dissolving
 const easeInOut = p => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
 function updateRingFillFrame() {
   const t = runtime.timer;
@@ -1248,18 +1249,22 @@ function updateRingFillFrame() {
   if (t.isManual) { ring.style.opacity = '1'; _ringOffset = 0; return; }   // CSS orbit owns the offset
   const dur     = t.segDuration;
   const elapsed = t.elapsedInSegment;
-  // Forward depletion: full (0) → empty (RING_C) across the step, in time.
-  const frac = dur > 0 ? Math.min(1, Math.max(0, elapsed / dur)) : 0;
-  _ringOffset = RING_C * frac;
-  ring.style.strokeDashoffset = _ringOffset.toFixed(1);
-  // Cross-fade the reset: opacity dips to 0 right at each boundary, where the
-  // offset silently snaps empty→full — so the reset is never seen as motion.
-  const fadeS = dur > 0 ? Math.min(RING_FADE_S, dur * 0.35) : 0;
+  const tailS   = dur > 0 ? Math.min(RING_TAIL_S, dur * 0.3) : 0;
+  const fillEnd = Math.max(0.001, dur - tailS);   // the ring reaches full here
   let op = 1;
-  if (fadeS > 0) {
-    if (elapsed < fadeS)            op = easeInOut(elapsed / fadeS);
-    else if (dur - elapsed < fadeS) op = easeInOut(Math.max(0, dur - elapsed) / fadeS);
+  if (elapsed < fillEnd) {
+    // Fill clockwise: empty (RING_C) → full (0), completing at fillEnd.
+    _ringOffset = RING_C * (1 - Math.min(1, elapsed / fillEnd));
+  } else {
+    // Completed: hold the full circle, then dissolve so the next step starts clean.
+    _ringOffset = 0;                              // full circle
+    const intoTail = elapsed - fillEnd;
+    const holdS    = Math.min(RING_HOLD_S, tailS * 0.45);
+    if (intoTail > holdS && tailS > holdS) {
+      op = 1 - easeInOut(Math.min(1, (intoTail - holdS) / (tailS - holdS)));   // 1 → 0
+    }
   }
+  ring.style.strokeDashoffset = _ringOffset.toFixed(1);
   ring.style.opacity = op.toFixed(3);
 }
 
