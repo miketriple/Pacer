@@ -526,6 +526,7 @@ function renderPaceList() {
   if (!state.paces.length) {
     reorderMode = false;   // nothing to reorder; reset so toggle is fresh next time
     container.innerHTML = `<div class="pace-empty">
+      <svg class="pace-empty-ring" viewBox="0 0 80 80" aria-hidden="true"><circle cx="40" cy="40" r="34"/></svg>
       <div class="pace-empty-title">No paces yet</div>
       Tap <strong>+ New Pace</strong> to build your first guided rhythm.
     </div>`;
@@ -1371,12 +1372,6 @@ function pauseTimer() {
   if (window.Capacitor?.isNativePlatform()) {
     runtime.pausedAtMs = Date.now();   // record when pause began for epoch adjustment on resume
     stopNativeTimer();
-    // [PacerSync] diagnostic — UI clock vs native clock at the pause instant.
-    // delta = how far the UI thinks we are minus how far the audio thinks we are.
-    // Remove once the sync is verified.
-    const _ui = runtime.timer.debugInfo;
-    const _nativeChunkMs = Date.now() - runtime.chunkStartMs;
-    console.log(`[PacerSync] PAUSE  seg=${_ui.seg} segMs=${_ui.segMs} uiActiveMs=${_ui.activeMs} nativeChunkMs=${_nativeChunkMs} delta=${_ui.activeMs - _nativeChunkMs}`);
   }
 }
 
@@ -1389,10 +1384,8 @@ function resumeTimer() {
     // Shift runtime.chunkStartMs forward by the pause duration so that
     // Date.now() - runtime.chunkStartMs continues to equal "timer-elapsed ms"
     // even after any number of pauses.
-    let _nativeShift = 0;
     if (runtime.pausedAtMs > 0) {
-      _nativeShift = Date.now() - runtime.pausedAtMs;
-      runtime.chunkStartMs += _nativeShift;
+      runtime.chunkStartMs += Date.now() - runtime.pausedAtMs;
       runtime.pausedAtMs = 0;
     }
     const elapsedMs = Date.now() - runtime.chunkStartMs;
@@ -1406,12 +1399,6 @@ function resumeTimer() {
     // cueSchedule re-fired already-played cues — the "cues back up / fire late
     // after a few pauses" bug.)
     startNativeTimerWithSchedule(remaining, runtime.pace?.name || 'Pacer');
-    // [PacerSync] diagnostic — UI vs native clocks after the resume re-base.
-    // uiShift/nativeShift should match; a growing |delta| across pauses = drift.
-    // Remove once the sync is verified.
-    const _ui = runtime.timer.debugInfo;
-    const _nativeChunkMs = Date.now() - runtime.chunkStartMs;
-    console.log(`[PacerSync] RESUME seg=${_ui.seg} segMs=${_ui.segMs} uiActiveMs=${_ui.activeMs} nativeChunkMs=${_nativeChunkMs} delta=${_ui.activeMs - _nativeChunkMs} uiShift=${_ui.lastPauseMs} nativeShift=${_nativeShift} remaining=${remaining.length} firstDelay=${remaining[0]?.delayMs}`);
   }
 }
 

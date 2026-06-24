@@ -67,7 +67,6 @@ export class TimerEngine {
     const pausedMs       = Date.now() - this._pausedAt;
     this._totalPausedMs += pausedMs;
     this._segStartTime  += pausedMs;   // shift anchor so elapsed stays correct
-    this._lastPauseMs    = pausedMs;   // diagnostic
     this._isPaused       = false;
     this._pausedAt       = null;
     this._scheduleInterval();
@@ -148,23 +147,6 @@ export class TimerEngine {
     return Math.floor((Date.now() - this._totalStartTime - this._totalPausedMs) / 1000);
   }
 
-  /**
-   * Dev diagnostic snapshot for UI-vs-audio sync analysis (not used in normal
-   * operation). activeMs = active (un-paused) ms since pace start; segMs = active
-   * ms into the current segment; lastPauseMs = the most recent resume's shift.
-   */
-  get debugInfo() {
-    const now = Date.now();
-    const inPause = (this._isPaused && this._pausedAt) ? now - this._pausedAt : 0;
-    return {
-      seg:         this._segIndex,
-      segMs:       this._segStartTime   ? Math.round(now - this._segStartTime - inPause) : 0,
-      activeMs:    this._totalStartTime ? Math.round(now - this._totalStartTime - this._totalPausedMs - inPause) : 0,
-      lastPauseMs: Math.round(this._lastPauseMs || 0),
-      paused:      this._isPaused,
-    };
-  }
-
   // ── Private ──────────────────────────────────────────────────
 
   _reset() {
@@ -176,7 +158,6 @@ export class TimerEngine {
     this._totalStartTime = null;
     this._totalPausedMs  = 0;
     this._pausedAt       = null;
-    this._lastPauseMs    = 0;   // diagnostic: ms shifted by the most recent resume
   }
 
   /**
