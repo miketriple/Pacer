@@ -399,6 +399,10 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg-gra
 .has-rounds .timer-rounds-track { opacity:.45; }
 .has-rounds .timer-rounds-fill  { opacity:1; }
 .timer-ring-fill { fill:none; stroke:url(#ring-grad); stroke-width:6; stroke-linecap:round; stroke-dasharray:578.05; stroke-dashoffset:0; filter:drop-shadow(0 0 5px var(--accent-glow)); }
+/* Ghost of the just-completed ring: a full circle under the fill arc that
+   updateRingFillFrame dissolves while the next step's sweep is already moving,
+   so a step boundary reads as an exhale instead of a stop. */
+.timer-ring-ghost { fill:none; stroke:url(#ring-grad); stroke-width:6; opacity:0; filter:drop-shadow(0 0 5px var(--accent-glow)); }
 /* Gradient stops re-theme via the accent vars; --accent2 defaults to --accent, so
    on single-accent themes the gradient is simply a solid accent stroke. */
 .ring-grad-a { stop-color:var(--accent); }
@@ -409,7 +413,7 @@ body { font-family:'Barlow',sans-serif; font-weight:400; background:var(--bg-gra
 @keyframes ringOrbit { to { transform:rotate(360deg); } }
 /* Paused: still the screen so the state reads instantly — desaturate the ring and
    drop its glow. The decoration waves are frozen separately, from JS. */
-.is-paused .timer-ring-fill { filter:saturate(.25) brightness(.5); }
+.is-paused .timer-ring-fill, .is-paused .timer-ring-ghost { filter:saturate(.25) brightness(.5); }
 .is-paused .timer-ring-fill.is-manual { animation-play-state:paused; }
 .timer-clock-overlay { position:absolute; inset:0; z-index:2; display:flex; flex-direction:column; align-items:center; justify-content:center; }
 .timer-clock { font-family:'Share Tech Mono',monospace; font-size:clamp(44px,13vw,58px); color:var(--text); line-height:1; letter-spacing:.01em; }

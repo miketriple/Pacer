@@ -63,17 +63,19 @@ const dirtyPaces     = new Set();
 let reorderMode = false;
 
 // Circumference of the timer ring (2π·r with r=92 in the SVG viewBox).
-// updateTimerDisplay sets stroke-dashoffset between 0 (full ring) and RING_C (empty).
+// updateRingFillFrame sets stroke-dashoffset between RING_C (empty) and 0 (full).
 const RING_C = 578.05;
 
 // Circumference of the inner "rounds" ring (2π·r, r=84). It fills as a multi-round
 // group works through its repeats — see updateProgress.
 const RING2_C = 527.79;
 
-// Smoothed main ring-fill dashoffset. updateRingFillFrame eases this toward the
-// time-based target every frame, which both smooths depletion and turns the
-// step-change reset into a quick refill instead of an empty→full snap.
-let _ringOffset = 0;
+// Last rendered ring-fill state: dashoffset (0 = full, RING_C = empty), which
+// segment it belonged to, and whether that segment was manual. The boundary
+// bookkeeping in updateRingFillFrame reads it to decide when a completed ring
+// should hand off to the ghost layer; _resetRingVisual re-arms it per pace.
+let _lastVisual = { index: -1, offset: RING_C, isManual: false };
+let _ghostIndex = -1;   // segment whose opening frames the ghost dissolves under
 
 // ============================================================
 // 3. RUNTIME — per-pace running state
@@ -118,10 +120,11 @@ runtime.timer = new TimerEngine({
   onSegmentStart(seg, idx) {
     runtime.cues.arm(seg);
     // Labels/clock/dots refresh here; the ring fill itself is driven every frame
-    // by updateRingFillFrame, which eases the step-change refill (no snap).
+    // by updateRingFillFrame from the engine's anchored timeline, so it needs no
+    // notification — and step changes get no visual accent (boundaries are
+    // marked by the audio and the ghost dissolve alone).
     updateTimerDisplay();
     animatePhaseTransition();
-    exciteRingFx(0.7, 0.4, 220);                                  // brief strong accent on a step change
 
     // Native timer: route all audio through Android TTS because Web Speech API
     // is unreliable in the Capacitor WebView.
@@ -1032,7 +1035,7 @@ function startPace(pace) {
   runtime.cues.setVoice(state.settings.voiceName);
   document.getElementById('timer-pace-name').textContent = pace.name || 'Pacer';
   buildProgress(units, sections);
-  _ringOffset = 0;               // ring starts full; updateRingFillFrame drives it from here
+  _resetRingVisual();            // arc starts empty, no stale ghost; the frame loop fills from here
   showScreen('timer');
   _setTimerPausedVisual(false);  // begin the reactive ring loop; clear any lingering paused visual
   runtime.timer.start(flat);
@@ -1235,38 +1238,71 @@ function wavePath(r, waves, amp, phase) {
   return d + 'Z';
 }
 
-// Drive the main ring fill each frame. The ring FILLS clockwise (empty → full) so
-// it COMPLETES the circle near the step's end — the closure the eye wants — then
-// holds full for a beat and dissolves (fades out) so the next step fills fresh.
-// All forward motion: the arc only ever grows; the reset is the dissolve, never a
-// reverse sweep. Self-contained per step, so jumps just fill fresh. Manual = orbit.
-const RING_TAIL_S = 0.34;   // reserved at each step's end for the completion hold + dissolve
-const RING_HOLD_S = 0.14;   // how long the completed circle holds at full before dissolving
+// Drive the main ring fill each frame from the engine's anchored timeline
+// (TimerEngine.visualState), not from the fields its 250 ms heartbeat last
+// wrote — at a step boundary the heartbeat lags up to a tick behind, and
+// reading it parked the ring in a dead zone exactly when continuity matters
+// most. Resolved per frame, the sweep completes at 100% on the boundary frame
+// and the very next frame is already filling the new step: the leading edge
+// never stops. The just-completed circle is handed to a ghost layer that
+// dissolves under the new sweep. Natural advances only — user jumps and
+// background catch-ups fill fresh with no phantom ring. Manual = CSS orbit.
+const GHOST_FADE_S   = 0.45;            // ghost dissolve length (capped for very short steps)
+const RING_NEAR_FULL = RING_C * 0.06;   // "arc had reached full" tolerance (~1 frame of sweep on a 1 s step)
 const easeInOut = p => (p < 0.5 ? 4 * p * p * p : 1 - Math.pow(-2 * p + 2, 3) / 2);
 function updateRingFillFrame() {
-  const t = runtime.timer;
-  const ring = document.getElementById('timer-ring-fill');
-  if (!ring || !t?.isRunning) return;
-  if (t.isManual) { ring.style.opacity = '1'; _ringOffset = 0; return; }   // CSS orbit owns the offset
-  const dur     = t.segDuration;
-  const elapsed = t.elapsedInSegment;
-  const tailS   = dur > 0 ? Math.min(RING_TAIL_S, dur * 0.3) : 0;
-  const fillEnd = Math.max(0.001, dur - tailS);   // the ring reaches full here
-  let op = 1;
-  if (elapsed < fillEnd) {
-    // Fill clockwise: empty (RING_C) → full (0), completing at fillEnd.
-    _ringOffset = RING_C * (1 - Math.min(1, elapsed / fillEnd));
-  } else {
-    // Completed: hold the full circle, then dissolve so the next step starts clean.
-    _ringOffset = 0;                              // full circle
-    const intoTail = elapsed - fillEnd;
-    const holdS    = Math.min(RING_HOLD_S, tailS * 0.45);
-    if (intoTail > holdS && tailS > holdS) {
-      op = 1 - easeInOut(Math.min(1, (intoTail - holdS) / (tailS - holdS)));   // 1 → 0
-    }
+  const ring  = document.getElementById('timer-ring-fill');
+  const ghost = document.getElementById('timer-ring-ghost');
+  const vs    = runtime.timer?.visualState();
+  if (!ring || !ghost || !vs) return;
+
+  // Boundary bookkeeping: a natural one-step advance whose arc had reached
+  // ~full hands the completed circle to the ghost; anything else (jump,
+  // restart, background skip, leaving a manual step) kills any ghost instead.
+  if (vs.index !== _lastVisual.index) {
+    const natural = vs.index === _lastVisual.index + 1
+      && !_lastVisual.isManual
+      && _lastVisual.offset <= RING_NEAR_FULL;
+    _ghostIndex = natural ? vs.index : -1;
   }
-  ring.style.strokeDashoffset = _ringOffset.toFixed(1);
-  ring.style.opacity = op.toFixed(3);
+
+  // Ghost dissolve is driven by the new segment's elapsed (not wall clock), so
+  // it freezes with the timer on pause and scales down for very short steps.
+  let ghostOp = 0;
+  if (_ghostIndex === vs.index) {
+    const fadeS = vs.duration > 0 ? Math.min(GHOST_FADE_S, vs.duration * 0.25) : GHOST_FADE_S;
+    const p     = Math.min(1, vs.elapsed / fadeS);
+    ghostOp     = 1 - easeInOut(p);
+    if (p >= 1) _ghostIndex = -1;
+  }
+  ghost.style.opacity = ghostOp.toFixed(3);
+
+  let offset;
+  if (vs.isManual) {
+    // CSS orbit owns the arc once updateTimerDisplay applies .is-manual (at
+    // most one heartbeat behind this frame); until then keep the arc empty so
+    // only the dissolving ghost shows.
+    offset = RING_C;
+    if (ring.classList.contains('is-manual')) offset = 0;
+    else ring.style.strokeDashoffset = offset.toFixed(1);
+  } else {
+    // Fill clockwise: empty (RING_C) → full (0), completing exactly at the
+    // step boundary. Opacity stays 1 — the reset lives entirely in the ghost.
+    offset = RING_C * (1 - Math.min(1, vs.elapsed / vs.duration));
+    ring.style.strokeDashoffset = offset.toFixed(1);
+  }
+  ring.style.opacity = '1';
+
+  _lastVisual = { index: vs.index, offset, isManual: vs.isManual };
+}
+
+/** Re-arm the per-pace ring-fill state: empty arc, no ghost, no stale
+ *  boundary bookkeeping from a previous run. Called by startPace. */
+function _resetRingVisual() {
+  _lastVisual = { index: -1, offset: RING_C, isManual: false };
+  _ghostIndex = -1;
+  const ghost = document.getElementById('timer-ring-ghost');
+  if (ghost) ghost.style.opacity = '0';
 }
 
 function ringFxFrame() {
@@ -1358,7 +1394,6 @@ function _setTimerPausedVisual(isPaused) {
   if (isPaused) {
     stopRingFx();
     document.querySelectorAll('.decor-ring-svg').forEach(el => { el.style.opacity = '0.05'; });
-    document.getElementById('timer-ring-fill').style.opacity = '1';  // un-freeze any mid-fade
   } else {
     startRingFx();
   }

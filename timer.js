@@ -147,6 +147,35 @@ export class TimerEngine {
     return Math.floor((Date.now() - this._totalStartTime - this._totalPausedMs) / 1000);
   }
 
+  /**
+   * Read-only view of the timeline for per-frame rendering, resolved from the
+   * anchored wall clock *right now* rather than from the fields the 250 ms
+   * heartbeat last wrote. At a segment boundary the heartbeat lags up to one
+   * tick (plus a deliberate paint frame) behind; visuals reading segmentIndex /
+   * elapsedInSegment sit in that dead zone exactly when continuity matters
+   * most. Resolving per frame, the frame after one segment shows 100% the next
+   * frame is already inside the following segment. Frozen while paused (same
+   * convention as elapsedInSegment). Returns null when nothing is running or
+   * the timeline is exhausted (onComplete fires within a tick).
+   *
+   * @param {number} [now]  Clock override for tests.
+   */
+  visualState(now = Date.now()) {
+    if (!this._running || !this._segStartTime) return null;
+    const ref = (this._isPaused && this._pausedAt) ? this._pausedAt : now;
+    const { index, startTime } = resolveActiveSegment(
+      this._segIndex, this._segStartTime, this.flatSegments, ref);
+    const seg = this.flatSegments[index];
+    if (!seg) return null;
+    const duration = seg.duration || 0;
+    return {
+      index,
+      duration,
+      elapsed:  Math.max(0, (ref - startTime) / 1000),
+      isManual: duration === 0,
+    };
+  }
+
   // ── Private ──────────────────────────────────────────────────
 
   _reset() {
@@ -223,13 +252,18 @@ export class TimerEngine {
     // Anchor the next segment to this one's exact end — not Date.now() at
     // detection time — so polling latency can't compound into UI-vs-audio drift.
     const nextStartTime = this._segStartTime + this._segDuration * 1000;
-    this._segIndex++;
-    if (this._segIndex >= this.flatSegments.length) {
+    const nextIndex     = this._segIndex + 1;
+    if (nextIndex >= this.flatSegments.length) {
       this._complete();
     } else {
       // One animation frame before starting the next segment so the browser
       // can paint the 100% / "0:00" final state of the segment that just ended.
-      requestAnimationFrame(() => this._startSegment(this._segIndex, nextStartTime));
+      // Do NOT mutate _segIndex here: _segIndex/_segStartTime must stay a
+      // consistent pair at all times, because visualState (per-frame ring) and
+      // the visibility recovery both resolve the timeline from them. A stale
+      // pair resolves forward correctly; a mismatched one reports a phantom
+      // segment. _startSegment moves both atomically.
+      requestAnimationFrame(() => this._startSegment(nextIndex, nextStartTime));
     }
   }
 
@@ -247,6 +281,7 @@ export class TimerEngine {
   // ── Background / Foreground Recovery ────────────────────────
 
   _attachVisibility() {
+    if (typeof document === 'undefined') return;   // Node (tests) — recovery is browser-only
     this._visHandler = () => this._onVisibilityChange();
     document.addEventListener('visibilitychange', this._visHandler);
   }
